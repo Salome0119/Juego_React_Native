@@ -41,14 +41,6 @@ const ENEMY_SPEED = 62;
 const ENEMY_PATROL_RANGE = 160;
 const ENEMY_ALERT_DISTANCE = 200;
 const ENEMY_ANGRY_ASPECT_RATIO = 500 / 500;
-const FLOATING_MIN_WIDTH = 40;
-const FLOATING_MAX_WIDTH = 80;
-const FLOATING_MIN_HEIGHT = 20;
-const FLOATING_MAX_HEIGHT = 40;
-const FLOATING_MIN_SPEED = 30;
-const FLOATING_MAX_SPEED = 70;
-const FLOATING_RANGE_MIN = 100;
-const FLOATING_RANGE_MAX = 200;
 const DESTRUCTIBLE_MIN_WIDTH = 50;
 const DESTRUCTIBLE_MAX_WIDTH = 90;
 const DESTRUCTIBLE_MIN_HEIGHT = 30;
@@ -74,24 +66,12 @@ const WATER_HEIGHT = 90;
 // Trampa con pinchos
 const TRAP_ARM_DELAY = 0.3; // segundos antes de activar pinchos
 
-// Plataformas mÃ³viles en Y
-const MOVING_PLATFORM_SPEED = 40;
-const MOVING_PLATFORM_RANGE = 90;
-
-// Plataformas desvanecibles
-const VANISH_DELAY = 1.5; // segundos tras ser pisadas
-
-// Lodo (ralentiza)
-const MUD_SLOW_FACTOR = 0.4; // factor de velocidad sobre lodo (40% de velocidad normal)
-
-// Nube trampa (se resquebraja)
-const CLOUD_TRAP_CRACK_DELAY = 0.5; // segundos antes de caer
+// Nube trampa: plataforma fija con un lago debajo (peligro al caer)
+const CLOUD_TRAP_HEIGHT = 40;
 
 // Planta PiraÃ±a
 // Planta Piraña: sube cuando la vaquita salte sobre ella.
 const PIRANHA_HEIGHT = 64;
-
-// Trampa de pÃºas periÃ³dica
 
 // Meta / bandera
 const GOAL_HEIGHT = 96;
@@ -102,12 +82,12 @@ const IMG_SPIKES = require('../../assets/obstacle-spikes.png');
 const IMG_BENCH = require('../../assets/obstacle-bench.png');
 const IMG_STONE_TRAP = require('../../assets/obstacle-stone_trampa.png');
 const IMG_STONE_TRAP_INACTIVE = require('../../assets/obstacle-stone_trampa_estado inicial.png');
-const IMG_CLOUD = require('../../assets/nubes.png');
-const IMG_CLOUD_TRAP = require('../../assets/nube_trampa.png');
-const IMG_MUD = require('../../assets/lodod.png');
-const IMG_MONSTER_GREEN_ANGRY = require('../../assets/monster-green_enojado.png');
 const IMG_BENCH_TRAP = require('../../assets/obstacle-bench_trampa.png');
 const IMG_BENCH_TRAP_INACTIVE = require('../../assets/obstacle-bench_trampa_estado_inicial.png');
+const IMG_CLOUD = require('../../assets/nubes.png');
+const IMG_CLOUD_TRAP = require('../../assets/nube_trampa.png');
+const IMG_LAKE = require('../../assets/lago_trampa.png');
+const IMG_MONSTER_GREEN_ANGRY = require('../../assets/monster-green_enojado.png');
 
 // Sprites de la vaquita (animaciÃ³n por estados)
 const IMG_COW_IDLE = require('../../assets/caminando1.png');
@@ -197,28 +177,20 @@ const LEVELS: LevelConfig[] = [
     water: { x: 3200, width: 600, bottom: GROUND_HEIGHT, height: 60 },
     goal: { x: 3900, bottom: GROUND_HEIGHT, width: 60, height: 100 },
 obstacles: [
-      { type: 'crate', x: 300, width: 140, height: 70 },
-      { type: 'spike', x: 590, width: 125, height: SPIKE_HEIGHT },
-      { type: 'enemy', x: 850, width: ENEMY_WIDTH, height: ENEMY_HEIGHT },
-      { type: 'bench_trap', x: 1000, width: 150, height: 70 },
-      { type: 'spike_trap', x: 1300, width: 125, height: SPIKE_HEIGHT },
-      { type: 'destructible', x: 1600, width: 120, height: 70 },
-      { type: 'floating', x: 1850, width: 120, height: 60 },
-      { type: 'moving', x: 2050, width: 140, height: 70 },
-      { type: 'spike_trap', x: 2300, width: 125, height: SPIKE_HEIGHT },
-      { type: 'enemy', x: 2550, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
-      { type: 'trap_platform', x: 2950, width: 190, height: 70 },
-      { type: 'moving_platform', x: 3200, bottom: 220, width: 180, height: 60 },
-      { type: 'piranha', x: 3400, width: 110, height: 110 },
-      { type: 'stone_trap', x: 3600, bottom: 150, width: 150, height: 38 },
-      { type: 'vanishing_platform', x: 3800, bottom: 150, width: 150, height: 38 },
-      { type: 'stone_trap', x: 4050, bottom: 150, width: 150, height: 38 },
-      // Lodo SOLO debajo de nubes fijas
-      { type: 'mud', x: 1850, bottom: GROUND_HEIGHT, width: 120, height: 30 },
-      { type: 'mud', x: 2700, bottom: GROUND_HEIGHT, width: 160, height: 30 },
-      // Nube trampa en el aire (se resquebraja al pisarse)
-      { type: 'cloud_trap', x: 2700, bottom: 200, width: 160, height: 40 },
-    ],
+        { type: 'crate', x: 300, width: 140, height: 70 },
+        { type: 'spike', x: 590, width: 125, height: SPIKE_HEIGHT },
+        { type: 'enemy', x: 850, width: ENEMY_WIDTH, height: ENEMY_HEIGHT },
+        { type: 'bench_trap', x: 1000, width: 150, height: 70 },
+        { type: 'spike_trap', x: 1300, width: 125, height: SPIKE_HEIGHT },
+        { type: 'destructible', x: 1600, width: 120, height: 70 },
+        { type: 'moving', x: 2050, width: 140, height: 70 },
+        { type: 'spike_trap', x: 2300, width: 125, height: SPIKE_HEIGHT },
+        { type: 'enemy', x: 2550, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
+        { type: 'trap_platform', x: 2950, width: 190, height: 70 },
+        { type: 'cloud_trap', x: 3290, bottom: GROUND_HEIGHT + 80, width: 150, height: CLOUD_TRAP_HEIGHT },
+        { type: 'cloud_trap', x: 3550, bottom: GROUND_HEIGHT + 80, width: 150, height: CLOUD_TRAP_HEIGHT },
+        { type: 'stone_trap', x: 4050, bottom: 150, width: 150, height: 38 },
+      ],
   },
   {
     id: 2,
@@ -226,32 +198,21 @@ obstacles: [
     width: 5400,
     water: { x: 4200, width: 700, bottom: GROUND_HEIGHT, height: 60 },
     goal: { x: 4900, bottom: GROUND_HEIGHT, width: 60, height: 100 },
-    obstacles: [
-      { type: 'stone_trap', x: 400, width: 150, height: 80 },
-      { type: 'spike_trap', x: 640, width: 125, height: SPIKE_HEIGHT },
-      { type: 'spike', x: 780, width: 125, height: SPIKE_HEIGHT },
-      { type: 'enemy', x: 1000, width: ENEMY_WIDTH, height: ENEMY_HEIGHT },
-      { type: 'stone_trap', x: 1400, width: 210, height: 70 },
-      { type: 'moving_platform', x: 2000, bottom: 220, width: 180, height: 60 },
-      { type: 'vanishing_platform', x: 2400, width: 160, height: 60 },
-      { type: 'piranha', x: 2800, width: 110, height: 110 },
-      { type: 'spike_trap', x: 3100, width: 125, height: SPIKE_HEIGHT },
-      { type: 'stone_trap', x: 3500, width: 140, height: 70 },
-      { type: 'piranha', x: 3850, width: 110, height: 110 },
-      { type: 'destructible', x: 4150, width: 120, height: 70 },
-      { type: 'enemy', x: 4550, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
-      { type: 'crate', x: 4850, width: 150, height: 38 },
-      { type: 'vanishing_platform', x: 5050, bottom: 150, width: 150, height: 38 },
-      { type: 'stone_trap', x: 5300, width: 150, height: 38 },
-      // Lodo SOLO debajo de nubes trampa
-      { type: 'mud', x: 2200, bottom: GROUND_HEIGHT, width: 140, height: 30 },
-      { type: 'mud', x: 3600, bottom: GROUND_HEIGHT, width: 120, height: 30 },
-      { type: 'mud', x: 4400, bottom: GROUND_HEIGHT, width: 150, height: 30 },
-      // Nubes trampa en secuencia
-      { type: 'cloud_trap', x: 2200, bottom: 250, width: 140, height: 38 },
-      { type: 'cloud_trap', x: 3600, bottom: 300, width: 120, height: 35 },
-      { type: 'cloud_trap', x: 4400, bottom: 200, width: 150, height: 40 },
-    ],
+obstacles: [
+        { type: 'stone_trap', x: 400, width: 150, height: 80 },
+        { type: 'spike_trap', x: 640, width: 125, height: SPIKE_HEIGHT },
+        { type: 'spike', x: 780, width: 125, height: SPIKE_HEIGHT },
+        { type: 'enemy', x: 1000, width: ENEMY_WIDTH, height: ENEMY_HEIGHT },
+        { type: 'stone_trap', x: 1400, width: 210, height: 70 },
+        { type: 'moving', x: 2000, width: 140, height: 70 },
+        { type: 'spike_trap', x: 3100, width: 125, height: SPIKE_HEIGHT },
+        { type: 'stone_trap', x: 3500, width: 140, height: 70 },
+        { type: 'destructible', x: 4150, width: 120, height: 70 },
+        { type: 'cloud_trap', x: 4300, bottom: GROUND_HEIGHT + 80, width: 160, height: CLOUD_TRAP_HEIGHT },
+        { type: 'cloud_trap', x: 4600, bottom: GROUND_HEIGHT + 80, width: 160, height: CLOUD_TRAP_HEIGHT },
+        { type: 'enemy', x: 4000, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
+        { type: 'stone_trap', x: 5300, width: 150, height: 38 },
+      ],
   },
 ];
 
@@ -265,18 +226,14 @@ type ObstacleType =
   | 'crate'
   | 'spike'
   | 'enemy'
-  | 'floating'
   | 'destructible'
   | 'moving'
   | 'trap_platform'
-  | 'moving_platform'
-  | 'vanishing_platform'
   | 'water'
   | 'piranha'
   | 'spike_trap'
   | 'stone_trap'
   | 'bench_trap'
-  | 'mud'
   | 'cloud_trap'
   | 'goal';
 
@@ -319,15 +276,6 @@ interface Obstacle {
   // Visuales calculados en el game loop para que el render sea puro
   hitFlash?: boolean;
   trapShakeY?: number;
-  // Plataforma mÃ³vil en Y
-  moveYSpeed?: number;
-  moveYRange?: number;
-  moveYStart?: number;
-  moveYDir?: number;
-  // Plataforma desvanecible
-  vanishStartTime?: number;
-  vanishDelay?: number;
-  vanished?: boolean;
   // Planta piraÃ±a
   piranhaUp?: boolean;
   piranhaTime?: number;
@@ -337,13 +285,10 @@ interface Obstacle {
   spikeTrapTimer?: number;
   // Piedra trampa (se activa al pisarla)
   stoneTrapActive?: boolean;
-// Banco trampa (se activa al pisarlo)
+  // Banco trampa (se activa al pisarlo)
   benchTrapActive?: boolean;
-  // Zona de lodo (ralentiza)
-  isMud?: boolean;
-  // Nube trampa (se resquebraja)
-  cloudTrapCracked?: boolean;
-  cloudTrapCrackTime?: number;
+  // Nube trampa (se activa al pisarla)
+  cloudTrapActive?: boolean;
   // Meta
   isGoal?: boolean;
 }
@@ -473,24 +418,6 @@ const createObstacle = (id: number, x: number, terrainBottom: number = GROUND_HE
       facing: Math.random() < 0.5 ? 'left' : 'right',
       range: randomBetween(MOVING_RANGE_MIN, MOVING_RANGE_MAX),
       startX: x,
-    };
-  }
-
-  if (roll < 0.63) {
-    // Plataforma de nubes en el aire (solo nubes, muy pocas) - probabilidad muy baja
-    const floatingHeight = randomBetween(FLOATING_MIN_HEIGHT, FLOATING_MAX_HEIGHT);
-    const floatingAltitude = GROUND_HEIGHT + randomBetween(100, 200); // Altura flotante sobre el suelo
-    return {
-      id,
-      type: 'floating',
-      x,
-      bottom: floatingAltitude,
-      width: randomBetween(FLOATING_MIN_WIDTH, FLOATING_MAX_WIDTH),
-      height: floatingHeight,
-      scored: false,
-      vy: randomBetween(FLOATING_MIN_SPEED, FLOATING_MAX_SPEED),
-      range: randomBetween(FLOATING_RANGE_MIN, FLOATING_RANGE_MAX),
-      startBottom: floatingAltitude,
     };
   }
 
@@ -656,19 +583,6 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
         });
         break;
       }
-      case 'mud': {
-        obstacles.push({
-          id: id++,
-          type: 'mud',
-          x: spec.x,
-          bottom: spec.bottom ?? baseBottom,
-          width: spec.width,
-          height: spec.height,
-          scored: false,
-          isMud: true,
-        });
-        break;
-      }
       case 'cloud_trap': {
         obstacles.push({
           id: id++,
@@ -678,38 +592,7 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
           width: spec.width,
           height: spec.height,
           scored: false,
-          cloudTrapCracked: false,
-        });
-        break;
-      }
-      case 'moving_platform': {
-        const mpBottom = spec.bottom ?? baseBottom;
-        obstacles.push({
-          id: id++,
-          type: 'moving_platform',
-          x: spec.x,
-          bottom: mpBottom,
-          width: spec.width,
-          height: spec.height,
-          scored: false,
-          moveYSpeed: MOVING_PLATFORM_SPEED,
-          moveYRange: MOVING_PLATFORM_RANGE,
-          moveYStart: mpBottom,
-          moveYDir: 1,
-          vy: 0,
-        });
-        break;
-      }
-      case 'vanishing_platform': {
-        obstacles.push({
-          id: id++,
-          type: 'vanishing_platform',
-          x: spec.x,
-          bottom: spec.bottom ?? baseBottom,
-          width: spec.width,
-          height: spec.height,
-          scored: false,
-          vanished: false,
+          cloudTrapActive: false,
         });
         break;
       }
@@ -722,38 +605,6 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
           width: spec.width,
           height: spec.height ?? WATER_HEIGHT,
           scored: false,
-        });
-        break;
-      }
-      case 'piranha': {
-        obstacles.push({
-          id: id++,
-          type: 'piranha',
-          x: spec.x,
-          bottom: spec.bottom ?? baseBottom,
-          width: spec.width,
-          height: spec.height,
-          scored: false,
-          piranhaUp: false,
-        });
-        break;
-      }
-      case 'floating': {
-        const floatVY = randomBetween(20, 40);
-        const floatRange = randomBetween(30, 60);
-        const floatVX = randomBetween(-8, 8); // Drift horizontal suave independiente
-        obstacles.push({
-          id: id++,
-          type: 'floating',
-          x: spec.x,
-          bottom: spec.bottom ?? baseBottom,
-          width: spec.width,
-          height: spec.height,
-          scored: false,
-          vy: floatVY,
-          range: floatRange,
-          startBottom: spec.bottom ?? baseBottom,
-          vx: floatVX,
         });
         break;
       }
@@ -827,11 +678,8 @@ const createLevelCoins = (levelId: number): Coin[] => {
   };
 
   for (const spec of level.obstacles) {
-    if (spec.type === 'crate' || spec.type === 'moving_platform' || spec.type === 'vanishing_platform') {
+    if (spec.type === 'crate') {
       placeCoin(spec.x + spec.width / 2 - COIN_WIDTH / 2, GROUND_HEIGHT + spec.height + 10);
-    }
-    if (spec.type === 'floating') {
-      placeCoin(spec.x + spec.width / 2 - COIN_WIDTH / 2, GROUND_HEIGHT + spec.height + 40);
     }
   }
 
@@ -893,6 +741,121 @@ const hasHorizontalOverlap = (
   x + width - inset > target.x &&
   x + inset < target.x + target.width;
 
+// Obstáculos que bloquean el paso: cajas, bloques destructibles, plataformas
+// móviles, plataformas trampa, piedras trampa, bancos trampa y nubes fijas.
+// Ninguna entidad (monstruo o vaquita) puede atravesarlos.
+const SOLID_BLOCKING_TYPES: ObstacleType[] = [
+  'crate',
+  'destructible',
+  'moving',
+  'trap_platform',
+  'stone_trap',
+  'bench_trap',
+  'cloud_trap',
+];
+
+interface CollisionBody {
+  x: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+interface HorizontalResolution {
+  x: number;
+  blockedLeft: boolean;
+  blockedRight: boolean;
+}
+
+/**
+ * Mueve un cuerpo en horizontal y resuelve la colisión contra los obstáculos
+ * sólidos.
+ *
+ * - Barrido: comprueba todo el tramo recorrido en el fotograma, de modo que
+ *   un cuerpo rápido (o con pocos FPS) no puede "saltar" el bloque.
+ * - Expulsión: si el cuerpo ya estaba dentro del bloque (por ejemplo porque
+ *   apareció o fue empujado dentro), se saca por el lado contrario al del
+ *   movimiento. Sin esto, un cuerpo que quedase dentro atravesaba el bloque
+ *   sin volver a chocar contra él.
+ */
+const resolveHorizontalCollision = (
+  body: CollisionBody,
+  targetX: number,
+  obstacles: Obstacle[],
+  excludeId?: number
+): HorizontalResolution => {
+  const startX = body.x;
+  const movingRight = targetX >= startX;
+  let x = targetX;
+  let blockedLeft = false;
+  let blockedRight = false;
+
+  for (const obstacle of obstacles) {
+    if (excludeId !== undefined && obstacle.id === excludeId) {
+      continue;
+    }
+    if (!SOLID_BLOCKING_TYPES.includes(obstacle.type)) {
+      continue;
+    }
+
+    const obstacleTop = obstacle.bottom + obstacle.height;
+    const overlapsVertically =
+      body.bottom < obstacleTop - 2 &&
+      body.bottom + body.height > obstacle.bottom + 2;
+    if (!overlapsVertically) {
+      continue;
+    }
+
+    const obstacleLeft = obstacle.x;
+    const obstacleRight = obstacle.x + obstacle.width;
+    const startInside =
+      startX + body.width > obstacleLeft && startX < obstacleRight;
+    const endInside = x + body.width > obstacleLeft && x < obstacleRight;
+
+    if (startInside) {
+      // El cuerpo ya estaba dentro del bloque: se expulsa por la cara más
+      // cercana (menor desplazamiento) para que no lo cruce de un lado a otro.
+      const penetrationLeft = startX + body.width - obstacleLeft;
+      const penetrationRight = obstacleRight - startX;
+      if (penetrationLeft <= penetrationRight) {
+        x = Math.min(x, obstacleLeft - body.width);
+        blockedRight = true;
+      } else {
+        x = Math.max(x, obstacleRight);
+        blockedLeft = true;
+      }
+      continue;
+    }
+
+    if (endInside) {
+      if (movingRight) {
+        x = Math.min(x, obstacleLeft - body.width);
+        blockedRight = true;
+      } else {
+        x = Math.max(x, obstacleRight);
+        blockedLeft = true;
+      }
+      continue;
+    }
+
+    // El cuerpo cruzó el bloque entero dentro del mismo fotograma.
+    const crossedBlock = movingRight
+      ? startX + body.width <= obstacleLeft && x + body.width > obstacleLeft
+      : startX >= obstacleRight && x < obstacleRight;
+    if (crossedBlock) {
+      if (movingRight) {
+        x = obstacleLeft - body.width;
+        blockedRight = true;
+      } else {
+        x = obstacleRight;
+        blockedLeft = true;
+      }
+    }
+  }
+
+  return { x, blockedLeft, blockedRight };
+};
+
 const getTerrainSupport = (
   x: number,
   width: number,
@@ -936,22 +899,8 @@ const getSupportBottom = (
   let support = GROUND_HEIGHT;
 
   for (const obstacle of obstacles) {
-    const solid =
-      obstacle.type === 'crate' ||
-      obstacle.type === 'destructible' ||
-      obstacle.type === 'moving' ||
-      obstacle.type === 'moving_platform' ||
-      obstacle.type === 'vanishing_platform' ||
-      obstacle.type === 'trap_platform' ||
-      obstacle.type === 'floating' ||
-      obstacle.type === 'cloud_trap';
+    const solid = SOLID_BLOCKING_TYPES.includes(obstacle.type);
     if (!solid || !hasHorizontalOverlap(x, width, obstacle, 6)) {
-      continue;
-    }
-    if (obstacle.type === 'vanishing_platform' && obstacle.vanished) {
-      continue;
-    }
-    if (obstacle.type === 'cloud_trap' && obstacle.vanished) {
       continue;
     }
 
@@ -1085,10 +1034,12 @@ const BenchTrapObstacle = React.memo(function BenchTrapObstacle({
     </View>
   );
 });
-const MudZone = React.memo(function MudZone({
+
+const CloudTrap = React.memo(function CloudTrap({
   obstacle,
   left,
-}: ObstacleViewProps) {
+}: PlatformViewProps) {
+  const active = obstacle.cloudTrapActive === true;
   return (
     <View
       style={[
@@ -1101,63 +1052,10 @@ const MudZone = React.memo(function MudZone({
         },
       ]}
     >
-      <Image source={IMG_MUD} style={styles.obstacleImg} resizeMode="stretch" />
-      {/* Capa superior oscura para mejor contraste bajo nubes */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(80, 50, 30, 0.35)',
-        }}
-      />
-      {/* Brillo superior sutil para efecto húmedo */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 4,
-          backgroundColor: 'rgba(160, 120, 80, 0.25)',
-        }}
-      />
+      <Image source={active ? IMG_CLOUD_TRAP : IMG_CLOUD} style={styles.obstacleImg} />
     </View>
   );
 });
-
-const CloudTrapPlatform = React.memo(function CloudTrapPlatform({
-  obstacle,
-  left,
-  now,
-}: ObstacleViewProps & { now: number }) {
-  const cracked = obstacle.cloudTrapCracked === true;
-  return (
-    <View
-      style={[
-        styles.obstacle,
-        {
-          left: Number(left),
-          bottom: Number(obstacle.bottom),
-          width: obstacle.width,
-          height: obstacle.height,
-        },
-      ]}
-    >
-      <Image
-        source={cracked ? IMG_CLOUD_TRAP : IMG_CLOUD}
-        style={[
-          styles.obstacleImg,
-          cracked && { transform: [{ translateX: Math.sin(now / 50) * 3 }] },
-        ]}
-        resizeMode="stretch"
-      />
-    </View>
-  );
-});
-
 const SpikeObstacle = React.memo(function SpikeObstacle({
   obstacle,
   left,
@@ -1305,27 +1203,6 @@ const MovingObstacle = React.memo(function MovingObstacle({
   );
 });
 
-const FloatingObstacle = React.memo(function FloatingObstacle({
-  obstacle,
-  left,
-}: ObstacleViewProps) {
-  return (
-    <View
-      style={[
-        styles.obstacle,
-        {
-          left: Number(left),
-          bottom: Number(obstacle.bottom),
-          width: obstacle.width,
-          height: obstacle.height,
-        },
-      ]}
-    >
-      <Image source={IMG_CLOUD} style={styles.obstacleImg} resizeMode="stretch" />
-    </View>
-  );
-});
-
 // ---- Nuevos obstÃ¡culos y trampas ----
 
 interface PlatformViewProps {
@@ -1362,51 +1239,6 @@ const TrapPlatform = React.memo(function TrapPlatform({
   );
 });
 
-const MovingPlatform = React.memo(function MovingPlatform({
-  obstacle,
-  left,
-}: PlatformViewProps) {
-  return (
-    <View
-      style={[
-        styles.obstacle,
-        {
-          left: Number(left),
-          bottom: Number(obstacle.bottom),
-          width: obstacle.width,
-          height: obstacle.height,
-        },
-      ]}
-    >
-      <Image source={IMG_CLOUD} style={styles.obstacleImg} resizeMode="stretch" />
-    </View>
-  );
-});
-
-const VanishingPlatform = React.memo(function VanishingPlatform({
-  obstacle,
-  left,
-}: PlatformViewProps) {
-  if (obstacle.vanished) {
-    return null;
-  }
-  return (
-    <View
-      style={[
-        styles.obstacle,
-        {
-          left: left,
-          bottom: obstacle.bottom || 0,
-          width: obstacle.width,
-          height: obstacle.height,
-        },
-      ]}
-    >
-      <Image source={IMG_CLOUD} style={styles.obstacleImg} resizeMode="stretch" />
-    </View>
-  );
-});
-
 const WaterZone = React.memo(function WaterZone({
   obstacle,
   left,
@@ -1417,14 +1249,13 @@ const WaterZone = React.memo(function WaterZone({
         styles.waterZone,
         {
           left: Number(left),
-          bottom: Number(obstacle.bottom),
+          bottom: Number(obstacle.bottom) - 20,
           width: obstacle.width,
-          height: obstacle.height,
+          height: obstacle.height + 70,
         },
       ]}
     >
-      <View style={styles.waterSurface} />
-      <Text style={styles.waterText}>AGUA</Text>
+      <Image source={IMG_LAKE} style={styles.waterImg} resizeMode="stretch" />
     </View>
   );
 });
@@ -1692,47 +1523,10 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
       // is active, force a full stop so the cow never keeps walking alone.
       if (isMovingRightRef.current) {
         const baseSpeed = !isGroundedRef.current ? AIR_MOVE_SPEED : MOVE_SPEED;
-        // Check if cow is on mud to apply slow factor
-        let onMud = false;
-        if (isGroundedRef.current) {
-          for (const obstacle of obstaclesRef.current) {
-            if (obstacle.isMud) {
-              const mudLeft = obstacle.x;
-              const mudRight = obstacle.x + obstacle.width;
-              if (
-                cowXRef.current + COW_WIDTH > mudLeft &&
-                cowXRef.current < mudRight &&
-                cowBottomRef.current >= obstacle.bottom - 5 &&
-                cowBottomRef.current <= obstacle.bottom + 5
-              ) {
-                onMud = true;
-                break;
-              }
-            }
-          }
-        }
-        velocityXRef.current = onMud ? baseSpeed * MUD_SLOW_FACTOR : baseSpeed;
+        velocityXRef.current = baseSpeed;
       } else if (isMovingLeftRef.current) {
         const baseSpeed = !isGroundedRef.current ? AIR_MOVE_SPEED : MOVE_SPEED;
-        let onMud = false;
-        if (isGroundedRef.current) {
-          for (const obstacle of obstaclesRef.current) {
-            if (obstacle.isMud) {
-              const mudLeft = obstacle.x;
-              const mudRight = obstacle.x + obstacle.width;
-              if (
-                cowXRef.current + COW_WIDTH > mudLeft &&
-                cowXRef.current < mudRight &&
-                cowBottomRef.current >= obstacle.bottom - 5 &&
-                cowBottomRef.current <= obstacle.bottom + 5
-              ) {
-                onMud = true;
-                break;
-              }
-            }
-          }
-        }
-        velocityXRef.current = onMud ? -baseSpeed * MUD_SLOW_FACTOR : -baseSpeed;
+        velocityXRef.current = -baseSpeed;
       } else {
         velocityXRef.current = 0;
       }
@@ -1741,56 +1535,19 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
       // Movimiento horizontal de la vaquita con colisiÃ³n sÃ³lida contra plataformas.
       // Si camina de lado choca sin traspasar; si cae, aterriza sobre la superficie superior.
-      const solidTypes = [
-        'crate',
-        'destructible',
-        'moving',
-        'moving_platform',
-        'vanishing_platform',
-        'trap_platform',
-        'floating',
-        'cloud_trap',
-      ];
-
       if (velocityX !== 0) {
-        let nextX = cowXRef.current + velocityX * delta;
+        const resolved = resolveHorizontalCollision(
+          {
+            x: cowXRef.current,
+            bottom: cowBottomRef.current,
+            width: COW_WIDTH,
+            height: COW_HEIGHT,
+          },
+          cowXRef.current + velocityX * delta,
+          obstaclesRef.current
+        );
 
-        for (const obstacle of obstaclesRef.current) {
-          if (!solidTypes.includes(obstacle.type)) {
-            continue;
-          }
-          if (obstacle.type === 'vanishing_platform' && obstacle.vanished) {
-            continue;
-          }
-          if (obstacle.type === 'cloud_trap' && obstacle.vanished) {
-            continue;
-          }
-
-          const obstacleTop = obstacle.bottom + obstacle.height;
-          const overlapsVertically =
-            cowBottomRef.current < obstacleTop - 2 &&
-            cowBottomRef.current + COW_HEIGHT > obstacle.bottom + 2;
-
-          if (!overlapsVertically) {
-            continue;
-          }
-
-          if (
-            velocityX > 0 &&
-            nextX + COW_WIDTH > obstacle.x &&
-            nextX < obstacle.x + obstacle.width
-          ) {
-            nextX = Math.min(nextX, obstacle.x - COW_WIDTH);
-          } else if (
-            velocityX < 0 &&
-            nextX < obstacle.x + obstacle.width &&
-            nextX + COW_WIDTH > obstacle.x
-          ) {
-            nextX = Math.max(nextX, obstacle.x + obstacle.width);
-          }
-        }
-
-        cowXRef.current = Math.max(0, nextX);
+        cowXRef.current = Math.max(0, resolved.x);
       }
 
       // Agua / fosa: cae dentro â†’ Game Over inmediato
@@ -1893,8 +1650,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           // Check obstacle/crate support for landing
           for (const obstacle of obstaclesRef.current) {
             if (
-              !solidTypes.includes(obstacle.type) ||
-              (obstacle.type === 'vanishing_platform' && obstacle.vanished) ||
+              !SOLID_BLOCKING_TYPES.includes(obstacle.type) ||
               !hasHorizontalOverlap(cowXRef.current, COW_WIDTH, obstacle, 6)
             ) {
               continue;
@@ -1951,78 +1707,45 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         const minX = obstacle.startX - obstacle.range;
         const maxX = obstacle.startX + obstacle.range;
 
-        if (obstacle.x <= minX) {
+        // Movimiento horizontal con colisiÃ³n sÃ³lida contra plataformas.
+        // El monstruo no puede atravesar cajas ni plataformas: rebota al chocar.
+        let nextEnemyX = obstacle.x + obstacle.vx * delta;
+
+        // LÃ­mites de patrulla: se aplican sobre la posiciÃ³n destino para que
+        // nunca se teletransporte al otro lado de un bloque.
+        if (nextEnemyX <= minX) {
+          nextEnemyX = minX + 1;
           obstacle.vx = Math.abs(baseSpeed);
-          obstacle.x = minX + 4; // Margen de empuje limpio para evitar loops
-        } else if (obstacle.x >= maxX) {
+        } else if (nextEnemyX >= maxX) {
+          nextEnemyX = maxX - 1;
           obstacle.vx = -Math.abs(baseSpeed);
-          obstacle.x = maxX - 4; // Margen de empuje limpio para evitar loops
         }
 
+        const resolvedEnemy = resolveHorizontalCollision(
+          {
+            x: obstacle.x,
+            bottom: obstacle.bottom,
+            width: obstacle.width,
+            height: obstacle.height,
+          },
+          nextEnemyX,
+          obstaclesRef.current,
+          obstacle.id
+        );
+
+        obstacle.x = Math.max(0, resolvedEnemy.x);
+
         // LÃ­mites del mundo izquierdo
-        if (obstacle.x < 0) {
+        if (obstacle.x <= 0) {
           obstacle.x = 4;
           obstacle.vx = Math.abs(baseSpeed);
         }
 
-        // Movimiento horizontal con colisiÃ³n sÃ³lida contra plataformas.
-        // El monstruo no puede atravesar cajas ni plataformas: rebota al chocar.
-        const enemySolidTypes = [
-          'crate',
-          'destructible',
-          'moving',
-          'moving_platform',
-          'vanishing_platform',
-          'trap_platform',
-          'floating',
-          'cloud_trap',
-        ];
-        let nextEnemyX = obstacle.x + obstacle.vx * delta;
-
-        for (const other of obstaclesRef.current) {
-          if (other.id === obstacle.id) {
-            continue;
-          }
-          if (!enemySolidTypes.includes(other.type)) {
-            continue;
-          }
-          if (other.type === 'vanishing_platform' && other.vanished) {
-            continue;
-          }
-          if (other.type === 'cloud_trap' && other.vanished) {
-            continue;
-          }
-
-          const otherTop = other.bottom + other.height;
-          const overlapsVertically =
-            obstacle.bottom < otherTop - 2 &&
-            obstacle.bottom + obstacle.height > other.bottom + 2;
-          if (!overlapsVertically) {
-            continue;
-          }
-
-          if (obstacle.vx > 0) {
-            // Se aproxima desde la izquierda: choca contra el lado izquierdo
-            if (
-              obstacle.x < other.x &&
-              nextEnemyX + obstacle.width > other.x
-            ) {
-              nextEnemyX = other.x - obstacle.width;
-              obstacle.vx = -Math.abs(obstacle.vx);
-            }
-          } else if (obstacle.vx < 0) {
-            // Se aproxima desde la derecha: choca contra el lado derecho
-            if (
-              obstacle.x + obstacle.width > other.x + other.width &&
-              nextEnemyX < other.x + other.width
-            ) {
-              nextEnemyX = other.x + other.width;
-              obstacle.vx = Math.abs(obstacle.vx);
-            }
-          }
+        if (resolvedEnemy.blockedRight && obstacle.vx > 0) {
+          obstacle.vx = -Math.abs(obstacle.vx);
+        } else if (resolvedEnemy.blockedLeft && obstacle.vx < 0) {
+          obstacle.vx = Math.abs(obstacle.vx);
         }
-
-        obstacle.x = nextEnemyX;
 
         obstacle.facing = obstacle.vx < 0 ? 'left' : 'right';
         if (obstacle.bossConfig) {
@@ -2054,90 +1777,8 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         }
       }
 
-      // Update moving platforms (Y), floating, vanishing, trap platforms, piranhas, and goal.
-      let cowRidingMovingPlatform = false;
+      // Update trap platforms, piranhas, and goal.
       for (const obstacle of obstaclesRef.current) {
-        // Plataforma mÃ³vil en Y (sube y baja suavemente) - MOVIMIENTO AUTÓNOMO 100%
-        if (obstacle.type === 'moving_platform' && obstacle.moveYSpeed && obstacle.moveYRange && obstacle.moveYStart !== undefined) {
-          const dir = obstacle.moveYDir ?? 1;
-          obstacle.bottom += dir * obstacle.moveYSpeed * delta;
-
-          if (obstacle.bottom - obstacle.moveYStart >= obstacle.moveYRange) {
-            obstacle.moveYDir = -1;
-          } else if (obstacle.bottom <= obstacle.moveYStart - obstacle.moveYRange) {
-            obstacle.moveYDir = 1;
-          }
-
-          // Si la vaquita estÃ¡ pisando esta plataforma, arrÃ¡ncala consigo (soporte sÃ³lido)
-          const onPlatform = 
-            isGroundedRef.current &&
-            cowBottomRef.current >= obstacle.bottom + obstacle.height - 2 &&
-            cowBottomRef.current <= obstacle.bottom + obstacle.height + 2 &&
-            cowXRef.current + COW_WIDTH > obstacle.x + 4 &&
-            cowXRef.current < obstacle.x + obstacle.width - 4;
-          if (onPlatform) {
-            cowBottomRef.current = obstacle.bottom + obstacle.height;
-            cowRidingMovingPlatform = true;
-          }
-        }
-
-        // Plataforma flotante existente
-        if (obstacle.type === 'floating' && obstacle.vy && obstacle.range && obstacle.startBottom !== undefined) {
-          // Movimiento vertical oscilante
-          obstacle.bottom += obstacle.vy * delta;
-          if (Math.abs(obstacle.bottom - obstacle.startBottom) >= obstacle.range) {
-            obstacle.vy *= -1;
-          }
-          // Drift horizontal suave e independiente (parallax continuo)
-          if (obstacle.vx !== undefined) {
-            obstacle.x += obstacle.vx * delta;
-            // Rebote suave en límites del mundo para mantenerlas en pantalla
-            if (obstacle.x < -200) {
-              obstacle.x = -200;
-              obstacle.vx = Math.abs(obstacle.vx);
-            } else if (obstacle.x > 6000) {
-              obstacle.x = 6000;
-              obstacle.vx = -Math.abs(obstacle.vx);
-            }
-          }
-        }
-
-        // Plataforma desvanecible: desaparece tras ser pisada VANISH_DELAY segundos
-        if (obstacle.type === 'vanishing_platform' && !obstacle.vanished) {
-          if (
-            isGroundedRef.current &&
-            cowBottomRef.current === obstacle.bottom + obstacle.height &&
-            cowXRef.current + COW_WIDTH > obstacle.x &&
-            cowXRef.current < obstacle.x + obstacle.width
-          ) {
-            if (obstacle.vanishStartTime === undefined) {
-              obstacle.vanishStartTime = performance.now() / 1000;
-            }
-            const now = performance.now() / 1000;
-            if (now - obstacle.vanishStartTime >= VANISH_DELAY) {
-              obstacle.vanished = true;
-            }
-          }
-        }
-
-        // Nube trampa: se resquebraja al pisarse y cae tras CRACK_DELAY
-        if (obstacle.type === 'cloud_trap' && !obstacle.cloudTrapCracked) {
-          if (
-            isGroundedRef.current &&
-            cowBottomRef.current >= obstacle.bottom + obstacle.height - 2 &&
-            cowBottomRef.current <= obstacle.bottom + obstacle.height + 2 &&
-            cowXRef.current + COW_WIDTH > obstacle.x &&
-            cowXRef.current < obstacle.x + obstacle.width
-          ) {
-            obstacle.cloudTrapCracked = true;
-            obstacle.cloudTrapCrackTime = performance.now() / 1000;
-          }
-        } else if (obstacle.type === 'cloud_trap' && obstacle.cloudTrapCracked) {
-          const now = performance.now() / 1000;
-          if (now - (obstacle.cloudTrapCrackTime ?? now) >= CLOUD_TRAP_CRACK_DELAY) {
-            obstacle.vanished = true; // desactiva colisión y render
-          }
-        }
 
         // Trampa con pinchos: se activa TRAP_ARM_DELAY segundos tras ser pisada
         if (obstacle.type === 'trap_platform' && !obstacle.trapTriggered) {
@@ -2232,9 +1873,10 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         }
       }
 
-      // Banco trampa: se activa cuando la vaquita se para encima
+      // Banco trampa: solo muestra la boca abierta mientras la vaquita está sobre él.
+      // Si la vaquita ya lo pasó, vuelve al estado inicial.
       for (const obstacle of obstaclesRef.current) {
-        if (obstacle.type !== 'bench_trap' || obstacle.benchTrapActive) {
+        if (obstacle.type !== 'bench_trap') {
           continue;
         }
         const cowLeft = cowXRef.current;
@@ -2243,21 +1885,29 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         const benchRight = obstacle.x + obstacle.width;
         const benchTop = obstacle.bottom + obstacle.height;
 
-        const onBench =
+        obstacle.benchTrapActive =
           cowRight > benchLeft &&
           cowLeft < benchRight &&
           cowBottomRef.current >= benchTop - 8 &&
           cowBottomRef.current <= benchTop + 8;
-
-        if (onBench) {
-          obstacle.benchTrapActive = true;
-        }
       }
 
-      // Si la vaquita no estÃ¡ en el suelo y se moviÃ³ con plataforma, mantener grounded
-      if (cowRidingMovingPlatform) {
-        isGroundedRef.current = true;
-        velocityYRef.current = 0;
+      // Nube trampa: se activa (boca abierta) mientras la vaquita está sobre ella
+      for (const obstacle of obstaclesRef.current) {
+        if (obstacle.type !== 'cloud_trap') {
+          continue;
+        }
+        const cowLeft = cowXRef.current;
+        const cowRight = cowXRef.current + COW_WIDTH;
+        const cloudLeft = obstacle.x;
+        const cloudRight = obstacle.x + obstacle.width;
+        const cloudTop = obstacle.bottom + obstacle.height;
+
+        obstacle.cloudTrapActive =
+          cowRight > cloudLeft &&
+          cowLeft < cloudRight &&
+          cowBottomRef.current >= cloudTop - 8 &&
+          cowBottomRef.current <= cloudTop + 8;
       }
 
       // Update bullets: move them always to the right and resolve collisions.
@@ -2507,14 +2157,13 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
         }
       }
 
-      // Only spikes are lethal obstacles; platforms and crates are safe.
+      // Solo pinchos y trampas activas son letales. Las rocas son plataformas
+      // seguras: el único peligro del lago es el agua.
       for (const obstacle of obstaclesRef.current) {
         const isTrapSpike = obstacle.type === 'spike_trap' && obstacle.spikeTrapVisible;
-        const isActiveStoneTrap = obstacle.type === 'stone_trap' && obstacle.stoneTrapActive;
         const isActiveBenchTrap = obstacle.type === 'bench_trap' && obstacle.benchTrapActive;
         if (
           obstacle.type !== 'spike' &&
-          !isActiveStoneTrap &&
           !isActiveBenchTrap &&
           !isTrapSpike
         ) {
@@ -3045,9 +2694,13 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     return () => clearTimeout(timer);
   }, [levelCompleted, advanceLevel]);
 
-  const visibleObstacles = obstacles.filter(
-    (obs) => obs.x + obs.width > view.cameraX && obs.x < view.cameraX + screenWidth
-  );
+  // El agua se dibuja primero para que las nubes (y el resto de obstáculos)
+  // queden por encima del lago.
+  const visibleObstacles = obstacles
+    .filter(
+      (obs) => obs.x + obs.width > view.cameraX && obs.x < view.cameraX + screenWidth
+    )
+    .sort((a, b) => (a.type === 'water' ? 0 : 1) - (b.type === 'water' ? 0 : 1));
   const visibleBullets = bullets.filter(
     (b) => b.x + 5 > view.cameraX && b.x - 5 < view.cameraX + screenWidth
   );
@@ -3096,10 +2749,8 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
             return <StoneTrapObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'bench_trap':
             return <BenchTrapObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
-          case 'mud':
-            return <MudZone key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'cloud_trap':
-            return <CloudTrapPlatform key={obstacle.id} obstacle={obstacle} left={left} now={view.now} />;
+            return <CloudTrap key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'enemy':
             return (
               <EnemyObstacle
@@ -3113,14 +2764,8 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
             return <DestructibleObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'moving':
             return <MovingObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
-          case 'floating':
-            return <FloatingObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'trap_platform':
             return <TrapPlatform key={obstacle.id} obstacle={obstacle} left={left} />;
-          case 'moving_platform':
-            return <MovingPlatform key={obstacle.id} obstacle={obstacle} left={left} />;
-          case 'vanishing_platform':
-            return <VanishingPlatform key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'water':
             return <WaterZone key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'piranha':
@@ -4067,32 +3712,12 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '15deg' }],
   },
   waterZone: {
-    backgroundColor: '#4fc3f7',
-    borderWidth: 2,
-    borderColor: '#0277bd',
-    borderRadius: 8,
-    opacity: 0.85,
-  },
-  waterSurface: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 6,
+    overflow: 'hidden',
   },
-  waterText: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '800',
-    transform: [{ translateX: -50 }, { translateY: 6 }],
-    textShadowColor: '#000',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+  waterImg: {
+    width: '100%',
+    height: '100%',
   },
   piranhaContainer: {
     position: 'absolute',
