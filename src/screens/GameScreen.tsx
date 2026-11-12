@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Image,
+  ImageSourcePropType,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { COW_HEIGHT, COW_WIDTH, Cow } from '../components/atoms/Cow';
 import { Enemy, BOSS_ASPECT_RATIO, ENEMY_ASPECT_RATIO, PIRANHA_ASPECT_RATIO, getEnemySpriteSize } from '../components/atoms/Enemy';
 import { CurrentScore } from '../components/molecules/CurrentScore';
@@ -66,15 +75,25 @@ const WATER_HEIGHT = 90;
 // Trampa con pinchos
 const TRAP_ARM_DELAY = 0.3; // segundos antes de activar pinchos
 
-// Nube trampa: plataforma fija con un lago debajo (peligro al caer)
+// Nube trampa: plataforma flotante que se resquebraja al pisarla y desaparece
 const CLOUD_TRAP_HEIGHT = 40;
+const CLOUD_TRAP_ASPECT_RATIO = 669 / 373; // proporción real de nubes.png
+const CLOUD_TRAP_CRACK_DELAY = 0.5; // segundos resquebrajada antes de desaparecer
 
 // Planta PiraÃ±a
 // Planta Piraña: sube cuando la vaquita salte sobre ella.
 const PIRANHA_HEIGHT = 64;
 
+// Portal entre niveles
+const PORTAL_WIDTH = 140;
+const PORTAL_HEIGHT = 140;
+const PORTAL_ANIM_SPEED = 1.1; // velocidad del fundido entre sprites (rad/s)
+const PORTAL_ROTATION_SPEED = 14; // grados por segundo del giro del portal
+const PORTAL_CLEAR_ZONE = 320; // zona sin obstáculos antes/después del portal
+const PORTAL_ABSORB_DURATION = 0.9; // segundos que tarda la vaquita en ser absorbida
+
 // Meta / bandera
-const GOAL_HEIGHT = 96;
+const GOAL_BOTTOM_PADDING = 13; // parte transparente del sprite que hay que hundir
 
 // Sprites de obstÃ¡culos (de assets/trampas.jpg, fondo eliminado)
 const IMG_STONE = require('../../assets/obstacle-stone.png');
@@ -89,19 +108,139 @@ const IMG_CLOUD_TRAP = require('../../assets/nube_trampa.png');
 const IMG_LAKE = require('../../assets/lago_trampa.png');
 const IMG_MONSTER_GREEN_ANGRY = require('../../assets/monster-green_enojado.png');
 
-// Sprites de la vaquita (animaciÃ³n por estados)
+// Portal entre niveles y fondos por nivel
+const IMG_PORTAL_1 = require('../../assets/portal_movimiento1.png');
+const IMG_PORTAL_2 = require('../../assets/portal_movimiento2.png');
+const IMG_BG_LEVEL_1 = require('../../assets/fondo.jpg');
+const IMG_BG_LEVEL_2 = require('../../assets/fondo_nivel2.jpg');
+const IMG_META = require('../../assets/meta.png');
+
+// Sprites de la vaquita (animación por estados)
 const IMG_COW_IDLE = require('../../assets/caminando1.png');
 const IMG_COW_ATTACK = require('../../assets/ataque.png');
 const IMG_COW_JUMP = require('../../assets/salto.png');
-const IMG_COW_WALK_1 = require('../../assets/caminando1.png');
 const IMG_COW_WALK_2 = require('../../assets/caminar2.png');
 const IMG_COW_DEATH = require('../../assets/muerte.png');
 
+// Sprites de la vaquita CON ARMA (2.0)
+const IMG_COW_IDLE_WEAPON = require('../../assets/caminando2.0.png');
+const IMG_COW_ATTACK_WEAPON = require('../../assets/ataque2.0.png');
+const IMG_COW_JUMP_WEAPON = require('../../assets/saltando2.0.png');
+
 const COIN_BONUS_PER_KILL = 5;
-const WEAPON_UPGRADE_COIN_THRESHOLDS = [10, 25, 50]; // Coin thresholds for weapon upgrades
+
+/**
+ * Geometría de los sprites "2.0" de la vaquita (lienzos de 669×373 con mucho
+ * relleno transparente). Cada entrada indica qué parte del PNG ocupa el dibujo
+ * (`content`) y dónde está el puño que sostiene el arma (`fist`, en px del PNG).
+ *
+ * Con estos datos la vaquita se dibuja siempre del mismo tamaño (su contenido
+ * ocupa COW_HEIGHT) y el arma se coloca exactamente sobre el puño, en vez de
+ * depender de un factor de escala fijo.
+ */
+interface ArmedCowSprite {
+  source: ImageSourcePropType;
+  canvasWidth: number;
+  canvasHeight: number;
+  content: { x: number; y: number; width: number; height: number };
+  fist: { x: number; y: number };
+}
+
+const ARMED_COW_SPRITES: Record<'idle' | 'attack' | 'jump', ArmedCowSprite> = {
+  idle: {
+    source: IMG_COW_IDLE_WEAPON,
+    canvasWidth: 669,
+    canvasHeight: 373,
+    content: { x: 126, y: 16, width: 355, height: 354 },
+    fist: { x: 455, y: 160 },
+  },
+  attack: {
+    source: IMG_COW_ATTACK_WEAPON,
+    canvasWidth: 669,
+    canvasHeight: 373,
+    content: { x: 91, y: 0, width: 372, height: 373 },
+    fist: { x: 430, y: 168 },
+  },
+  jump: {
+    source: IMG_COW_JUMP_WEAPON,
+    canvasWidth: 669,
+    canvasHeight: 373,
+    content: { x: 131, y: 15, width: 396, height: 358 },
+    fist: { x: 487, y: 105 },
+  },
+};
+
+/** Ancho visible del arma respecto al ancho visible de la vaquita. */
+const WEAPON_VISUAL_WIDTH_RATIO = 0.55;
+/** Punto del arma (fracción de su dibujo) que queda dentro del puño. */
+const WEAPON_GRIP = { x: 0.16, y: 0.8 };
+
+/**
+ * Superposición del arma: devuelve el recuadro (dentro de la caja del sprite
+ * 2.0) donde debe dibujarse el PNG del arma para que el punto de agarre caiga
+ * justo sobre el puño de la vaquita.
+ *
+ * `spriteScale` es la escala con la que el lienzo del sprite se dibuja dentro
+ * de su caja; coincide con `armedScale * absorbScale` del render.
+ */
+function computeArmedWeaponOverlay(
+  weapon: WeaponConfig,
+  sprite: ArmedCowSprite,
+  spriteScale: number
+) {
+  // El dibujo del arma ocupa esta fracción del ancho visible de la vaquita.
+  const trimWidthOnScreen =
+    sprite.content.width * spriteScale * WEAPON_VISUAL_WIDTH_RATIO;
+  const gunScale = trimWidthOnScreen / weapon.trim.width;
+
+  // Puño en coordenadas del lienzo ya escaladas.
+  const fistX = sprite.fist.x * spriteScale;
+  const fistY = sprite.fist.y * spriteScale;
+
+  // Punto de agarre del arma, también en coordenadas del lienzo.
+  const gripX = (weapon.trim.x + weapon.trim.width * WEAPON_GRIP.x) * gunScale;
+  const gripY = (weapon.trim.y + weapon.trim.height * WEAPON_GRIP.y) * gunScale;
+
+  return {
+    width: weapon.canvasWidth * gunScale,
+    height: weapon.canvasHeight * gunScale,
+    left: fistX - gripX,
+    top: fistY - gripY,
+  };
+}
+
+/**
+ * Boca del cañón del arma ya dibujada: extremo derecho del dibujo, a un tercio
+ * de su altura. Coordenadas relativas a la esquina superior izquierda de la caja.
+ */
+function gunMuzzleOffset(weapon: WeaponConfig, w: number, h: number) {
+  return {
+    x: ((weapon.trim.x + weapon.trim.width) / weapon.canvasWidth) * w,
+    y: ((weapon.trim.y + weapon.trim.height * 0.35) / weapon.canvasHeight) * h,
+  };
+}
+
+// Armería: cada arma cuesta más monedas y hace más daño a los jefes.
+const IMG_WEAPON_ESC = require('../../assets/arma.png');
+const IMG_WEAPON_GLUE = require('../../assets/arma1.png');
+const IMG_WEAPON_STICKY = require('../../assets/arma2.png');
+const IMG_WEAPON_SAP = require('../../assets/arma3.png');
+const IMG_WEAPON_GEL = require('../../assets/arma4.png');
 
 interface WeaponConfig {
   name: string;
+  sprite: ImageSourcePropType;
+  aspectRatio: number;
+  /** Tamaño real del PNG del arma, en px. */
+  canvasWidth: number;
+  canvasHeight: number;
+  /**
+   * Rectángulo que ocupa el dibujo del arma dentro de su PNG (px).
+   * Los PNG traen mucho relleno transparente; sin esto el arma se dibuja
+   * descentrada y a un tamaño arbitrario.
+   */
+  trim: { x: number; y: number; width: number; height: number };
+  price: number;
   speed: number;
   radius: number;
   lifetime: number;
@@ -115,6 +254,12 @@ interface WeaponConfig {
 const WEAPONS: WeaponConfig[] = [
   {
     name: 'Escopeta',
+    sprite: IMG_WEAPON_ESC,
+    aspectRatio: 669 / 373,
+    canvasWidth: 669,
+    canvasHeight: 373,
+    trim: { x: 129, y: 73, width: 459, height: 252 },
+    price: 0,
     speed: 980,
     radius: 4,
     lifetime: 3.5,
@@ -125,37 +270,72 @@ const WEAPONS: WeaponConfig[] = [
     spread: 0,
   },
   {
-    name: 'Rifle',
-    speed: 1280,
-    radius: 3,
-    lifetime: 4.5,
-    cooldown: 0.16,
-    damage: 1,
-    pierce: 2,
-    multiShot: 1,
-    spread: 0,
-  },
-  {
-    name: 'Lanzador',
-    speed: 760,
-    radius: 7,
-    lifetime: 2.8,
-    cooldown: 0.42,
-    damage: 1,
+    name: 'Revólver GLUE',
+    sprite: IMG_WEAPON_GLUE,
+    aspectRatio: 561 / 333,
+    canvasWidth: 561,
+    canvasHeight: 333,
+    trim: { x: 33, y: 69, width: 450, height: 262 },
+    price: 10,
+    speed: 1150,
+    radius: 4,
+    lifetime: 4.0,
+    cooldown: 0.24,
+    damage: 2,
     pierce: 1,
     multiShot: 1,
     spread: 0,
   },
   {
-    name: 'Plasma',
-    speed: 1420,
-    radius: 5,
-    lifetime: 5.0,
+    name: 'Cañón STICKY',
+    sprite: IMG_WEAPON_STICKY,
+    aspectRatio: 618 / 356,
+    canvasWidth: 618,
+    canvasHeight: 356,
+    trim: { x: 35, y: 46, width: 550, height: 303 },
+    price: 25,
+    speed: 1020,
+    radius: 6,
+    lifetime: 3.5,
+    cooldown: 0.20,
+    damage: 3,
+    pierce: 2,
+    multiShot: 1,
+    spread: 0,
+  },
+  {
+    name: 'Rifle SAP',
+    sprite: IMG_WEAPON_SAP,
+    aspectRatio: 669 / 373,
+    canvasWidth: 669,
+    canvasHeight: 373,
+    trim: { x: 66, y: 30, width: 566, height: 332 },
+    price: 45,
+    speed: 1350,
+    radius: 4,
+    lifetime: 4.5,
+    cooldown: 0.16,
+    damage: 5,
+    pierce: 2,
+    multiShot: 1,
+    spread: 0,
+  },
+  {
+    name: 'Cañón GEL',
+    sprite: IMG_WEAPON_GEL,
+    aspectRatio: 669 / 373,
+    canvasWidth: 669,
+    canvasHeight: 373,
+    trim: { x: 76, y: 27, width: 584, height: 327 },
+    price: 65,
+    speed: 1250,
+    radius: 6,
+    lifetime: 4.5,
     cooldown: 0.12,
-    damage: 1,
+    damage: 8,
     pierce: 3,
     multiShot: 2,
-    spread: 0.18,
+    spread: 0.16,
   },
 ];
 
@@ -167,6 +347,8 @@ interface LevelConfig {
   obstacles: InitialObstacleSpec[];
   water?: { x: number; width: number; bottom: number; height: number };
   goal?: { x: number; bottom: number; width: number; height: number };
+  // Si es false, no se generan obstáculos procedimentales en este nivel.
+  procedural?: boolean;
 }
 
 const LEVELS: LevelConfig[] = [
@@ -186,33 +368,21 @@ obstacles: [
         { type: 'moving', x: 2050, width: 140, height: 70 },
         { type: 'spike_trap', x: 2300, width: 125, height: SPIKE_HEIGHT },
         { type: 'enemy', x: 2550, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
-        { type: 'trap_platform', x: 2950, width: 190, height: 70 },
-        { type: 'cloud_trap', x: 3290, bottom: GROUND_HEIGHT + 80, width: 150, height: CLOUD_TRAP_HEIGHT },
-        { type: 'cloud_trap', x: 3550, bottom: GROUND_HEIGHT + 80, width: 150, height: CLOUD_TRAP_HEIGHT },
-        { type: 'stone_trap', x: 4050, bottom: 150, width: 150, height: 38 },
+        // Piedras de la trampa del lago: apoyadas en el suelo a ambos lados
+        { type: 'crate', x: 3200, width: 150, height: 80 },
+        { type: 'crate', x: 3650, width: 150, height: 80 },
+        // Plataforma de nube sobre el lago para cruzarlo
+        { type: 'cloud_trap', x: 3425, bottom: GROUND_HEIGHT + 80, width: 150, height: CLOUD_TRAP_HEIGHT },
+        // Portal junto a la bandera para viajar al nivel 2
+        { type: 'portal', x: 4010, width: PORTAL_WIDTH, height: PORTAL_HEIGHT },
       ],
   },
   {
     id: 2,
-    name: 'Nivel 2: Cuevas',
-    width: 5400,
-    water: { x: 4200, width: 700, bottom: GROUND_HEIGHT, height: 60 },
-    goal: { x: 4900, bottom: GROUND_HEIGHT, width: 60, height: 100 },
-obstacles: [
-        { type: 'stone_trap', x: 400, width: 150, height: 80 },
-        { type: 'spike_trap', x: 640, width: 125, height: SPIKE_HEIGHT },
-        { type: 'spike', x: 780, width: 125, height: SPIKE_HEIGHT },
-        { type: 'enemy', x: 1000, width: ENEMY_WIDTH, height: ENEMY_HEIGHT },
-        { type: 'stone_trap', x: 1400, width: 210, height: 70 },
-        { type: 'moving', x: 2000, width: 140, height: 70 },
-        { type: 'spike_trap', x: 3100, width: 125, height: SPIKE_HEIGHT },
-        { type: 'stone_trap', x: 3500, width: 140, height: 70 },
-        { type: 'destructible', x: 4150, width: 120, height: 70 },
-        { type: 'cloud_trap', x: 4300, bottom: GROUND_HEIGHT + 80, width: 160, height: CLOUD_TRAP_HEIGHT },
-        { type: 'cloud_trap', x: 4600, bottom: GROUND_HEIGHT + 80, width: 160, height: CLOUD_TRAP_HEIGHT },
-        { type: 'enemy', x: 4000, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
-        { type: 'stone_trap', x: 5300, width: 150, height: 38 },
-      ],
+    name: 'Nivel 2',
+    width: 3200,
+    procedural: false,
+    obstacles: [],
   },
 ];
 
@@ -235,6 +405,7 @@ type ObstacleType =
   | 'stone_trap'
   | 'bench_trap'
   | 'cloud_trap'
+  | 'portal'
   | 'goal';
 
 interface BossConfig {
@@ -287,8 +458,11 @@ interface Obstacle {
   stoneTrapActive?: boolean;
   // Banco trampa (se activa al pisarlo)
   benchTrapActive?: boolean;
-  // Nube trampa (se activa al pisarla)
+  // Nube trampa (se resquebraja y desaparece al pisarla)
   cloudTrapActive?: boolean;
+  cloudTrapCracked?: boolean;
+  cloudTrapCrackTime?: number;
+  vanished?: boolean;
   // Meta
   isGoal?: boolean;
 }
@@ -593,6 +767,8 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
           height: spec.height,
           scored: false,
           cloudTrapActive: false,
+          cloudTrapCracked: false,
+          vanished: false,
         });
         break;
       }
@@ -604,6 +780,18 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
           bottom: spec.bottom ?? baseBottom - 10,
           width: spec.width,
           height: spec.height ?? WATER_HEIGHT,
+          scored: false,
+        });
+        break;
+      }
+      case 'portal': {
+        obstacles.push({
+          id: id++,
+          type: 'portal',
+          x: spec.x,
+          bottom: spec.bottom ?? baseBottom,
+          width: spec.width,
+          height: spec.height,
           scored: false,
         });
         break;
@@ -761,6 +949,10 @@ interface CollisionBody {
   height: number;
 }
 
+// Una nube trampa ya destruida deja de colisionar y de dibujarse.
+const isVanishedObstacle = (obstacle: Obstacle): boolean =>
+  obstacle.type === 'cloud_trap' && obstacle.vanished === true;
+
 interface HorizontalResolution {
   x: number;
   blockedLeft: boolean;
@@ -795,6 +987,9 @@ const resolveHorizontalCollision = (
       continue;
     }
     if (!SOLID_BLOCKING_TYPES.includes(obstacle.type)) {
+      continue;
+    }
+    if (isVanishedObstacle(obstacle)) {
       continue;
     }
 
@@ -900,7 +1095,7 @@ const getSupportBottom = (
 
   for (const obstacle of obstacles) {
     const solid = SOLID_BLOCKING_TYPES.includes(obstacle.type);
-    if (!solid || !hasHorizontalOverlap(x, width, obstacle, 6)) {
+    if (!solid || isVanishedObstacle(obstacle) || !hasHorizontalOverlap(x, width, obstacle, 6)) {
       continue;
     }
 
@@ -1038,21 +1233,26 @@ const BenchTrapObstacle = React.memo(function BenchTrapObstacle({
 const CloudTrap = React.memo(function CloudTrap({
   obstacle,
   left,
-}: PlatformViewProps) {
-  const active = obstacle.cloudTrapActive === true;
+  cracked,
+}: PlatformViewProps & { cracked: boolean }) {
+  // Se dibuja con la proporción real del sprite (669x373) para que no se vea
+  // recortada, y se alinea su parte superior con la superficie de apoyo.
+  const renderHeight = obstacle.width / CLOUD_TRAP_ASPECT_RATIO;
   return (
     <View
-      style={[
-        styles.obstacle,
-        {
-          left: Number(left),
-          bottom: Number(obstacle.bottom),
-          width: obstacle.width,
-          height: obstacle.height,
-        },
-      ]}
+      style={{
+        position: 'absolute',
+        left: Number(left),
+        bottom: Number(obstacle.bottom + obstacle.height - renderHeight),
+        width: obstacle.width,
+        height: renderHeight,
+      }}
     >
-      <Image source={active ? IMG_CLOUD_TRAP : IMG_CLOUD} style={styles.obstacleImg} />
+      <Image
+        source={cracked ? IMG_CLOUD_TRAP : IMG_CLOUD}
+        style={styles.obstacleImg}
+        resizeMode="contain"
+      />
     </View>
   );
 });
@@ -1249,9 +1449,11 @@ const WaterZone = React.memo(function WaterZone({
         styles.waterZone,
         {
           left: Number(left),
-          bottom: Number(obstacle.bottom) - 20,
+          // El lago ocupa todo el piso: se extiende por debajo del borde
+          // inferior de la pantalla y sube hasta la superficie del suelo.
+          bottom: -24,
           width: obstacle.width,
-          height: obstacle.height + 70,
+          height: GROUND_HEIGHT + obstacle.height + 72,
         },
       ]}
     >
@@ -1319,13 +1521,62 @@ const Goal = React.memo(function Goal({
     <View
       style={[
         styles.goalContainer,
-        { left: Number(left), bottom: Number(obstacle.bottom) },
+        {
+          left: Number(left),
+          // El sprite tiene relleno transparente abajo: lo hundimos para que
+          // la base quede completamente apoyada en el suelo.
+          bottom: Number(obstacle.bottom) - GOAL_BOTTOM_PADDING,
+          width: Number(obstacle.width),
+        },
       ]}
     >
-      <View style={styles.goalPole} />
-      <View style={styles.goalFlag} />
-      <View style={styles.savePoint} />
-      <Text style={styles.goalText}>META</Text>
+      <Image
+        source={IMG_META}
+        style={styles.goalImage}
+        resizeMode="contain"
+        fadeDuration={0}
+      />
+    </View>
+  );
+});
+
+const Portal = React.memo(function Portal({
+  obstacle,
+  left,
+  now,
+}: PlatformViewProps & { now: number }) {
+  // Fundido suave entre los dos sprites + giro y respiración lentos.
+  const blend = (Math.sin(now * PORTAL_ANIM_SPEED) + 1) / 2;
+  const pulse = 1 + Math.sin(now * PORTAL_ANIM_SPEED) * 0.035;
+  const rotation = ((now * PORTAL_ROTATION_SPEED) % 360).toFixed(1);
+  const glowOpacity = 0.28 + blend * 0.22;
+
+  return (
+    <View
+      style={[
+        styles.portalContainer,
+        {
+          left: Number(left),
+          bottom: Number(obstacle.bottom),
+          width: obstacle.width,
+          height: obstacle.height,
+          transform: [{ scale: pulse }, { rotate: `${rotation}deg` }],
+        },
+      ]}
+    >
+      <View style={[styles.portalGlow, { opacity: glowOpacity }]} />
+      <Image
+        source={IMG_PORTAL_1}
+        style={[styles.portalImgLayer, { opacity: blend }]}
+        resizeMode="cover"
+        fadeDuration={0}
+      />
+      <Image
+        source={IMG_PORTAL_2}
+        style={[styles.portalImgLayer, { opacity: 1 - blend }]}
+        resizeMode="cover"
+        fadeDuration={0}
+      />
     </View>
   );
 });
@@ -1401,6 +1652,13 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const [gameOver, setGameOver] = useState(false);
   const [cowDead, setCowDead] = useState(false);
   const [levelCompleted, setLevelCompleted] = useState(false);
+  const [portalAbsorb, setPortalAbsorb] = useState<{
+    startedAt: number;
+    portalX: number;
+    portalBottom: number;
+    portalWidth: number;
+    portalHeight: number;
+  } | null>(null);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [currentWeapon, setCurrentWeapon] = useState(0);
   const [muzzleFlashBorn, setMuzzleFlashBorn] = useState(0);
@@ -1447,19 +1705,77 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const deathEffectIdRef = useRef(0);
   const coinsRefState = useRef<Coin[]>([]);
   const levelCompletedRef = useRef(false);
+  const portalAbsorbRef = useRef(false);
 
-  const checkWeaponUpgrade = (currentCoins: number) => {
-    let targetWeaponIndex = 0;
-    for (let i = 0; i < WEAPON_UPGRADE_COIN_THRESHOLDS.length; i++) {
-      if (currentCoins >= WEAPON_UPGRADE_COIN_THRESHOLDS[i]) {
-        targetWeaponIndex = Math.min(WEAPONS.length - 1, i + 1);
+  // ---- Armería ----
+  const [shopOpen, setShopOpen] = useState(false);
+  const [ownedWeapons, setOwnedWeapons] = useState<boolean[]>(() =>
+    WEAPONS.map((_, i) => i === 0)
+  );
+  const shopOpenRef = useRef(false);
+  const ownedWeaponsRef = useRef<boolean[]>(WEAPONS.map((_, i) => i === 0));
+  const [shopSlide] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    Animated.timing(shopSlide, {
+      toValue: shopOpen ? 1 : 0,
+      duration: shopOpen ? 240 : 200,
+      useNativeDriver: true,
+    }).start();
+  }, [shopOpen, shopSlide]);
+
+  const openShop = useCallback(() => {
+    if (gameOverRef.current || portalAbsorbRef.current) {
+      return;
+    }
+    // Suelta los controles para que la vaquita no siga corriendo al volver.
+    leftHeldRef.current = false;
+    rightHeldRef.current = false;
+    isMovingLeftRef.current = false;
+    isMovingRightRef.current = false;
+    isPressingLeftRef.current = false;
+    isPressingRightRef.current = false;
+    shopOpenRef.current = true;
+    setShopOpen(true);
+  }, []);
+
+  const closeShop = useCallback(() => {
+    shopOpenRef.current = false;
+    setShopOpen(false);
+  }, []);
+
+  const buyOrEquipWeapon = useCallback((index: number) => {
+    const weapon = WEAPONS[index];
+    if (!weapon) {
+      return;
+    }
+
+    // Si es el arma actual, desequipar (volver a la base). La Escopeta (0) es el
+    // arma de serie y no se desequipa. Las armas compradas siguen siendo del
+    // jugador: desequipar no las borra.
+    if (index === weaponRef.current && index !== 0) {
+      weaponRef.current = 0;
+      setCurrentWeapon(0);
+      return;
+    }
+
+    const isOwned = ownedWeaponsRef.current[index];
+    if (!isOwned) {
+      if (coinsRefCount.current < weapon.price) {
+        return;
       }
+      coinsRefCount.current -= weapon.price;
+      setCoins(coinsRefCount.current);
+
+      const nextOwned = [...ownedWeaponsRef.current];
+      nextOwned[index] = true;
+      ownedWeaponsRef.current = nextOwned;
+      setOwnedWeapons(nextOwned);
     }
-    if (targetWeaponIndex > weaponRef.current) {
-      weaponRef.current = targetWeaponIndex;
-      setCurrentWeapon(targetWeaponIndex);
-    }
-  };
+
+    weaponRef.current = index;
+    setCurrentWeapon(index);
+  }, []);
 
   useEffect(() => {
     let frameId = 0;
@@ -1515,6 +1831,12 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
       if (gameOverRef.current) {
         running = false;
+        return;
+      }
+
+      // La armería pausa la partida mientras el jugador elige un arma.
+      if (shopOpenRef.current) {
+        frameId = requestAnimationFrame(loop);
         return;
       }
 
@@ -1580,6 +1902,42 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           cowBottomRef.current < obstacle.bottom + obstacle.height
         ) {
           triggerGameOver();
+        }
+      }
+
+      // Portal: al tocarlo, absorbe a la vaquita y la lleva al siguiente nivel.
+      if (!gameOverRef.current && !portalAbsorbRef.current) {
+        for (const obstacle of obstaclesRef.current) {
+          if (obstacle.type !== 'portal') {
+            continue;
+          }
+          const touchesPortal =
+            cowXRef.current < obstacle.x + obstacle.width &&
+            cowXRef.current + COW_WIDTH > obstacle.x &&
+            cowBottomRef.current < obstacle.bottom + obstacle.height &&
+            cowBottomRef.current + COW_HEIGHT > obstacle.bottom;
+
+          if (!touchesPortal) {
+            continue;
+          }
+
+          portalAbsorbRef.current = true;
+          velocityXRef.current = 0;
+          velocityYRef.current = 0;
+          leftHeldRef.current = false;
+          rightHeldRef.current = false;
+          isMovingRightRef.current = false;
+          isMovingLeftRef.current = false;
+          isPressingLeftRef.current = false;
+          isPressingRightRef.current = false;
+          setPortalAbsorb({
+            startedAt: performance.now() / 1000,
+            portalX: obstacle.x,
+            portalBottom: obstacle.bottom,
+            portalWidth: obstacle.width,
+            portalHeight: obstacle.height,
+          });
+          break;
         }
       }
 
@@ -1651,6 +2009,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           for (const obstacle of obstaclesRef.current) {
             if (
               !SOLID_BLOCKING_TYPES.includes(obstacle.type) ||
+              isVanishedObstacle(obstacle) ||
               !hasHorizontalOverlap(cowXRef.current, COW_WIDTH, obstacle, 6)
             ) {
               continue;
@@ -1892,9 +2251,9 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           cowBottomRef.current <= benchTop + 8;
       }
 
-      // Nube trampa: se activa (boca abierta) mientras la vaquita está sobre ella
+      // Nube trampa: al pisarla se resquebraja y desaparece para que la vaquita caiga.
       for (const obstacle of obstaclesRef.current) {
-        if (obstacle.type !== 'cloud_trap') {
+        if (obstacle.type !== 'cloud_trap' || obstacle.vanished) {
           continue;
         }
         const cowLeft = cowXRef.current;
@@ -1903,11 +2262,30 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         const cloudRight = obstacle.x + obstacle.width;
         const cloudTop = obstacle.bottom + obstacle.height;
 
-        obstacle.cloudTrapActive =
+        const onCloud =
+          isGroundedRef.current &&
           cowRight > cloudLeft &&
           cowLeft < cloudRight &&
-          cowBottomRef.current >= cloudTop - 8 &&
-          cowBottomRef.current <= cloudTop + 8;
+          cowBottomRef.current >= cloudTop - 2 &&
+          cowBottomRef.current <= cloudTop + 2;
+
+        obstacle.cloudTrapActive = onCloud;
+
+        if (onCloud && !obstacle.cloudTrapCracked) {
+          obstacle.cloudTrapCracked = true;
+          obstacle.cloudTrapCrackTime = performance.now() / 1000;
+        }
+
+        if (obstacle.cloudTrapCracked) {
+          const now = performance.now() / 1000;
+          if (
+            now - (obstacle.cloudTrapCrackTime ?? now) >=
+            CLOUD_TRAP_CRACK_DELAY
+          ) {
+            obstacle.vanished = true;
+            obstacle.cloudTrapActive = false;
+          }
+        }
       }
 
       // Update bullets: move them always to the right and resolve collisions.
@@ -1949,7 +2327,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
           if (hitBoss) {
             const now = performance.now() / 1000;
-            const bossHp = (hitBoss.health ?? 1) - 1;
+            const bossHp = (hitBoss.health ?? 1) - (weapon.damage ?? 1);
 
             // Registrar tiempo de impacto para efecto visual de destello
             const idx = obstaclesRef.current.findIndex(
@@ -1992,7 +2370,6 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
               setScore(scoreRef.current);
               coinsRefCount.current += coinReward;
               setCoins(coinsRefCount.current);
-              checkWeaponUpgrade(coinsRefCount.current);
             } else {
               if (idx !== -1) {
                 obstaclesRef.current[idx].health = bossHp;
@@ -2085,7 +2462,6 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
                 setScore(scoreRef.current);
                 coinsRefCount.current += coinReward;
                 setCoins(coinsRefCount.current);
-                checkWeaponUpgrade(coinsRefCount.current);
               } else {
                 if (idx !== -1) {
                   obstaclesRef.current[idx].health = newHealth;
@@ -2183,7 +2559,15 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
           continue;
         }
 
-        if (intersectsHazard(cowXRef.current, cowBottomRef.current, obstacle)) {
+        // El tronco trampa es sólido: cuando la vaquita se para encima queda
+        // apoyada justo en su borde superior, por lo que el AABB normal no
+        // detecta contacto. Se amplía el área letal un poco hacia arriba para
+        // que la muerda al pisarlo.
+        const hazard: Obstacle = isActiveBenchTrap
+          ? { ...obstacle, height: obstacle.height + 10 }
+          : obstacle;
+
+        if (intersectsHazard(cowXRef.current, cowBottomRef.current, hazard)) {
           triggerGameOver();
           break;
         }
@@ -2261,46 +2645,59 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
       if (coinsCollected > 0) {
         coinsRefCount.current += coinsCollected;
         setCoins(coinsRefCount.current);
-        checkWeaponUpgrade(coinsRefCount.current);
       }
 
       let generatedObstacle = false;
 
-      while (
-        nextObstacleXRef.current <
-        cameraXRef.current + screenWidth + GENERATION_AHEAD
-      ) {
-        const lastObstacleX = obstaclesRef.current.length > 0
-          ? Math.max(...obstaclesRef.current.map((o) => o.x))
-          : 0;
-
-        if (nextObstacleXRef.current - lastObstacleX < SPAWN_GAP) {
-          nextObstacleXRef.current = lastObstacleX + SPAWN_GAP;
-          continue;
-        }
-
-        const terrainBottom = getTerrainBottomAt(
-          nextObstacleXRef.current,
-          terrainRef.current
+      // Los niveles marcados con procedural: false (por ahora el nivel 2)
+      // no generan obstáculos ni monstruos automáticamente.
+      if (getLevelConfig(levelRef.current).procedural !== false) {
+        // No se generan obstáculos más allá del portal: la zona posterior
+        // queda despejada para entrar al siguiente nivel.
+        const portalObstacle = obstaclesRef.current.find(
+          (o) => o.type === 'portal'
         );
-        obstacleIdRef.current += 1;
-        const newObstacle = createObstacle(
-          obstacleIdRef.current,
-          nextObstacleXRef.current,
-          terrainBottom
-        );
-        obstaclesRef.current.push(newObstacle);
+        const spawnLimitX = portalObstacle
+          ? portalObstacle.x - PORTAL_CLEAR_ZONE
+          : Number.POSITIVE_INFINITY;
 
-        // Extra spacing after enemies so they don't spawn glued to crates/spikes
-        if (newObstacle.type === 'enemy') {
-          nextObstacleXRef.current += SPAWN_GAP;
-        } else {
-          nextObstacleXRef.current += randomBetween(
-            OBSTACLE_GAP_MIN,
-            OBSTACLE_GAP_MAX
+        while (
+          nextObstacleXRef.current <
+            cameraXRef.current + screenWidth + GENERATION_AHEAD &&
+          nextObstacleXRef.current < spawnLimitX
+        ) {
+          const lastObstacleX = obstaclesRef.current.length > 0
+            ? Math.max(...obstaclesRef.current.map((o) => o.x))
+            : 0;
+
+          if (nextObstacleXRef.current - lastObstacleX < SPAWN_GAP) {
+            nextObstacleXRef.current = lastObstacleX + SPAWN_GAP;
+            continue;
+          }
+
+          const terrainBottom = getTerrainBottomAt(
+            nextObstacleXRef.current,
+            terrainRef.current
           );
+          obstacleIdRef.current += 1;
+          const newObstacle = createObstacle(
+            obstacleIdRef.current,
+            nextObstacleXRef.current,
+            terrainBottom
+          );
+          obstaclesRef.current.push(newObstacle);
+
+          // Extra spacing after enemies so they don't spawn glued to crates/spikes
+          if (newObstacle.type === 'enemy') {
+            nextObstacleXRef.current += SPAWN_GAP;
+          } else {
+            nextObstacleXRef.current += randomBetween(
+              OBSTACLE_GAP_MIN,
+              OBSTACLE_GAP_MAX
+            );
+          }
+          generatedObstacle = true;
         }
-        generatedObstacle = true;
       }
 
       // Generate terrain segments ahead of the camera
@@ -2335,9 +2732,6 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
       if (generatedTerrain) {
         setTerrain([...terrainRef.current]);
       }
-
-      // Check for weapon upgrade based on coins
-      checkWeaponUpgrade(coinsRefCount.current);
 
       // Visuales con tiempo: se calculan aquí (dentro del loop) para que los
       // componentes de render sigan siendo puros (react-hooks/purity).
@@ -2376,7 +2770,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, []);
 
   const updateHorizontalVelocity = useCallback(() => {
-    if (gameOverRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current) {
       velocityXRef.current = 0;
       return;
     }
@@ -2395,7 +2789,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, []);
 
   const handleLeftPressIn = useCallback(() => {
-    if (gameOverRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current) {
       return;
     }
 
@@ -2415,7 +2809,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, [updateHorizontalVelocity]);
 
   const handleRightPressIn = useCallback(() => {
-    if (gameOverRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current) {
       return;
     }
 
@@ -2435,7 +2829,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, [updateHorizontalVelocity]);
 
   const handleJumpPressIn = useCallback(() => {
-    if (gameOverRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current) {
       return;
     }
 
@@ -2451,7 +2845,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, [requestStart]);
 
   const shoot = useCallback(() => {
-    if (gameOverRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current) {
       return;
     }
 
@@ -2464,11 +2858,51 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     lastShotRef.current = now;
     setMuzzleFlashBorn(now);
 
-    const muzzleX =
-      facing === 'right'
-        ? cowXRef.current + COW_WIDTH + 10
-        : cowXRef.current - 24;
-    const muzzleY = cowBottomRef.current + COW_HEIGHT * 0.45;
+    // ---- Calcular posición de la boca del cañón ----
+    const cowScreenX = cowXRef.current;
+    const cowBottomVal = cowBottomRef.current;
+
+    const isShootingNow = muzzleFlashBorn > 0 && now - muzzleFlashBorn < 0.2;
+    const hasWeaponEquipped = !cowDead && currentWeapon > 0;
+    const grounded = isGroundedRef.current ?? view.isGrounded;
+
+    const armedSpr = !hasWeaponEquipped
+      ? null
+      : isShootingNow
+        ? ARMED_COW_SPRITES.attack
+        : grounded
+          ? ARMED_COW_SPRITES.idle
+          : ARMED_COW_SPRITES.jump;
+
+let muzzleX: number;
+    let muzzleY: number;
+
+    if (armedSpr) {
+      // Sin animación de absorción (portalAbsorbRef bloquea el disparo).
+      const spriteScale = COW_HEIGHT / armedSpr.content.height;
+      const overlay = computeArmedWeaponOverlay(weapon, armedSpr, spriteScale);
+      const muzzleOffset = gunMuzzleOffset(weapon, overlay.width, overlay.height);
+
+      // Boca del cañón dentro de la caja del sprite.
+      const localX = overlay.left + muzzleOffset.x;
+      const localYFromTop = overlay.top + muzzleOffset.y;
+
+      // Origen de la caja del sprite respecto a la caja de colisión.
+      const contentWidth = armedSpr.content.width * spriteScale;
+      const contentLeft = armedSpr.content.x * spriteScale;
+      const boxLeftOffset = (COW_WIDTH - contentWidth) / 2 - contentLeft;
+      const boxWidth = armedSpr.canvasWidth * spriteScale;
+      const boxHeight = armedSpr.canvasHeight * spriteScale;
+
+      muzzleX =
+        cowScreenX +
+        boxLeftOffset +
+        (facing === 'right' ? localX : boxWidth - localX);
+      muzzleY = cowBottomVal + boxHeight - localYFromTop;
+    } else {
+      muzzleX = cowScreenX + (facing === 'right' ? COW_WIDTH + 8 : -24);
+      muzzleY = cowBottomVal + COW_HEIGHT * 0.45;
+    }
 
     // Multi-shot: fire multiple projectiles with spread
     for (let i = 0; i < weapon.multiShot; i++) {
@@ -2494,7 +2928,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
 
     setBullets([...bulletsRef.current]);
     requestStart();
-  }, [facing, requestStart]);
+  }, [cowDead, currentWeapon, facing, muzzleFlashBorn, requestStart, view.isGrounded]);
 
   const handleShootPressIn = useCallback(() => {
     shoot();
@@ -2589,6 +3023,9 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     scoreRef.current = 0;
     coinsRefCount.current = 0;
     weaponRef.current = 0;
+    const baseOwned = WEAPONS.map((_, i) => i === 0);
+    ownedWeaponsRef.current = baseOwned;
+    shopOpenRef.current = false;
     nextObstacleXRef.current = INITIAL_NEXT_OBSTACLE_X;
     obstacleIdRef.current = initialObstacles.length;
     gameOverRef.current = false;
@@ -2597,6 +3034,8 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     setCowDead(false);
     levelCompletedRef.current = false;
     setLevelCompleted(false);
+    portalAbsorbRef.current = false;
+    setPortalAbsorb(null);
     setObstacles(initialObstacles);
     setTerrain(initialTerrain);
     setBullets([]);
@@ -2616,6 +3055,8 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     setScore(0);
     setCoins(0);
     setCurrentWeapon(0);
+    setOwnedWeapons(baseOwned);
+    setShopOpen(false);
 
     requestStart();
   }, [requestStart]);
@@ -2651,8 +3092,6 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     bulletIdRef.current = 0;
     lastShotRef.current = 0;
     scoreRef.current = 0;
-    coinsRefCount.current = 0;
-    weaponRef.current = 0;
     nextObstacleXRef.current = INITIAL_NEXT_OBSTACLE_X;
     obstacleIdRef.current = initialObstacles.length;
     gameOverRef.current = false;
@@ -2661,6 +3100,8 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     setCowDead(false);
     levelCompletedRef.current = false;
     setLevelCompleted(false);
+    portalAbsorbRef.current = false;
+    setPortalAbsorb(null);
     setObstacles(initialObstacles);
     setTerrain(initialTerrain);
     setBullets([]);
@@ -2678,27 +3119,35 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     });
     setFacing('right');
     setScore(0);
-    setCoins(0);
-    setCurrentWeapon(0);
+    setShopOpen(false);
 
     requestStart();
   }, [requestStart]);
 
 
-  // Al alcanzar la meta: pasar al siguiente nivel automÃ¡ticamente (si queda alguno)
+  // Portal: cuando absorbe a la vaquita, espera la animación y pasa al nivel 2.
   useEffect(() => {
-    if (!levelCompleted || levelRef.current >= LEVELS.length) {
+    if (!portalAbsorb) {
       return;
     }
-    const timer = setTimeout(() => advanceLevel(), 1800);
+    const timer = setTimeout(() => {
+      setPortalAbsorb(null);
+      portalAbsorbRef.current = false;
+      if (levelRef.current < LEVELS.length) {
+        advanceLevel();
+      }
+    }, PORTAL_ABSORB_DURATION * 1000);
     return () => clearTimeout(timer);
-  }, [levelCompleted, advanceLevel]);
+  }, [portalAbsorb, advanceLevel]);
 
   // El agua se dibuja primero para que las nubes (y el resto de obstáculos)
   // queden por encima del lago.
   const visibleObstacles = obstacles
     .filter(
-      (obs) => obs.x + obs.width > view.cameraX && obs.x < view.cameraX + screenWidth
+      (obs) =>
+        !isVanishedObstacle(obs) &&
+        obs.x + obs.width > view.cameraX &&
+        obs.x < view.cameraX + screenWidth
     )
     .sort((a, b) => (a.type === 'water' ? 0 : 1) - (b.type === 'water' ? 0 : 1));
   const visibleBullets = bullets.filter(
@@ -2708,28 +3157,126 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     (c) => !c.collected && c.x + c.width > view.cameraX && c.x < view.cameraX + screenWidth
   );
 
-  // ---- SelecciÃ³n de sprite de la vaquita ----
+  // ---- Selección de sprite de la vaquita ----
   // Prioridad: disparando > en el aire > caminando > reposo
+  // `armedSprite` guarda la geometría 2.0 (sirve para colocar el arma dibujada
+  // sobre el puño); los PNG 2.0 no traen el arma pintada.
+  const hasWeapon = currentWeapon > 0 && !cowDead;
   const isShooting = muzzleFlashBorn > 0 && view.now - muzzleFlashBorn < 0.2;
-  const walkFrame = Math.floor(view.now * 4) % 2; // alterna cada 250ms
+  const walkFrame = Math.floor(view.now * 4) % 2;
+  const armedSprite = !hasWeapon
+    ? null
+    : isShooting
+      ? ARMED_COW_SPRITES.attack
+      : !view.isGrounded
+        ? ARMED_COW_SPRITES.jump
+        : ARMED_COW_SPRITES.idle;
+
+  // Imagen de la vaquita: con arma equipada solo se sustituyen tres estados por
+  // su versión 2.0 (caminando → saltando → ataque). El resto de movimientos
+  // (caminar, muerte) conservan exactamente los sprites de siempre.
   const cowSprite = cowDead
     ? IMG_COW_DEATH
-    : isShooting
-      ? IMG_COW_ATTACK
-      : !view.isGrounded
-        ? IMG_COW_JUMP
-        : view.isMoving
-          ? walkFrame === 0
-            ? IMG_COW_WALK_1
-            : IMG_COW_WALK_2
-          : IMG_COW_IDLE;
+    : armedSprite
+      ? isShooting
+        ? IMG_COW_ATTACK_WEAPON
+        : !view.isGrounded
+          ? IMG_COW_JUMP_WEAPON
+          : view.isMoving && walkFrame === 1
+            ? IMG_COW_WALK_2
+            : IMG_COW_IDLE_WEAPON
+      : isShooting
+        ? IMG_COW_ATTACK
+        : !view.isGrounded
+          ? IMG_COW_JUMP
+          : view.isMoving && walkFrame === 1
+            ? IMG_COW_WALK_2
+            : IMG_COW_IDLE;
+
+  const backgroundImage = currentLevel >= 2 ? IMG_BG_LEVEL_2 : IMG_BG_LEVEL_1;
+
+  // Animación de absorción: la vaquita se encoge y se desvanece hacia el portal.
+  const absorbProgress = portalAbsorb
+    ? Math.min(
+        1,
+        Math.max(0, (view.now - portalAbsorb.startedAt) / PORTAL_ABSORB_DURATION)
+      )
+    : 0;
+  const absorbEase = absorbProgress * absorbProgress;
+  const portalCenterScreenX = portalAbsorb
+    ? portalAbsorb.portalX - view.cameraX + portalAbsorb.portalWidth / 2
+    : 0;
+
+  // Los sprites "2.0" traen relleno transparente alrededor del dibujo: se escala
+  // el PNG para que el dibujo ocupe el alto de la vaquita base y se desplaza la
+  // caja para que el dibujo quede centrado sobre la caja de colisión.
+  const armedScale = armedSprite ? COW_HEIGHT / armedSprite.content.height : 1;
+  const absorbScale = 1 - absorbEase * 0.92;
+  const spriteScale = armedScale * absorbScale;
+  const cowRenderWidth =
+    (armedSprite ? armedSprite.canvasWidth * armedScale : COW_WIDTH) * absorbScale;
+  const cowRenderHeight =
+    (armedSprite ? armedSprite.canvasHeight * armedScale : COW_HEIGHT) * absorbScale;
+  const cowContentWidth =
+    (armedSprite ? armedSprite.content.width * armedScale : COW_WIDTH) * absorbScale;
+  const cowContentLeft =
+    (armedSprite ? armedSprite.content.x * armedScale : 0) * absorbScale;
+  const cowContentBottomGap =
+    (armedSprite
+      ? (armedSprite.canvasHeight -
+          armedSprite.content.y -
+          armedSprite.content.height) *
+        armedScale
+      : 0) * absorbScale;
+
+  const cowRestLeft =
+    view.cowScreenX + (COW_WIDTH - cowContentWidth) / 2 - cowContentLeft;
+  const cowRestBottom = view.cowBottom - cowContentBottomGap;
+
+  const cowRenderLeft = portalAbsorb
+    ? cowRestLeft +
+      (portalCenterScreenX - (view.cowScreenX + COW_WIDTH / 2)) * absorbEase
+    : cowRestLeft;
+  const cowRenderBottom = portalAbsorb
+    ? cowRestBottom +
+      (portalAbsorb.portalBottom +
+        portalAbsorb.portalHeight / 2 -
+        COW_HEIGHT / 2 -
+        view.cowBottom) *
+        absorbEase
+    : cowRestBottom;
+
+  // Arma equipada: el PNG se coloca sobre el puño del sprite, dimensionado según
+  // el dibujo real del arma (no según su lienzo transparente).
+  const cowWeapon = (() => {
+    if (!armedSprite || currentWeapon === 0) {
+      return null;
+    }
+    const weapon = WEAPONS[currentWeapon];
+    const overlay = computeArmedWeaponOverlay(weapon, armedSprite, spriteScale);
+
+    return {
+      source: weapon.sprite,
+      ...overlay,
+      // Boca del cañón dentro de la caja del sprite (para el fogonazo).
+      muzzleLocal: {
+        x: overlay.left + gunMuzzleOffset(weapon, overlay.width, overlay.height).x,
+        y: overlay.top + gunMuzzleOffset(weapon, overlay.width, overlay.height).y,
+      },
+    };
+  })();
+
+  // Boca del cañón (desde la esquina superior izquierda de la caja de la vaquita).
+  const muzzleLocalX = cowWeapon ? cowWeapon.muzzleLocal.x : COW_WIDTH + 8;
+  const muzzleLocalYFromTop = cowWeapon
+    ? cowWeapon.muzzleLocal.y
+    : COW_HEIGHT * 0.72;
+
+  const shopPanelWidth = Math.min(320, screenWidth * 0.86);
+
   return (
     <View style={styles.container}>
-      <Image
-        source={require('../../assets/fondo.jpg')}
-        style={styles.bgImage}
-        resizeMode="cover"
-      />
+      <Image source={backgroundImage} style={styles.bgImage} resizeMode="cover" />
 
       {currentLevel > 0 && (
         <Text style={styles.levelText}>
@@ -2737,6 +3284,34 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
           {levelCompleted ? '🟢 COMPLETADO' : ''}
         </Text>
       )}
+
+      {/* El suelo se dibuja antes que el agua y los obstáculos para que el
+          lago pueda ocupar visualmente todo el piso. El nivel 2 usa una
+          paleta oscura acorde a su fondo. */}
+      <View style={[styles.ground, currentLevel >= 2 && styles.groundNight]}>
+        <View style={styles.stoneRow}>
+          {Array.from({ length: 8 }).map((_, index) => (
+            <View
+              key={index}
+              style={[styles.stoneBlock, currentLevel >= 2 && styles.stoneBlockNight]}
+            />
+          ))}
+        </View>
+        <View style={[styles.grass, currentLevel >= 2 && styles.grassNight]}>
+          <View
+            style={[
+              styles.grassHighlight,
+              currentLevel >= 2 && styles.grassHighlightNight,
+            ]}
+          />
+          <View style={styles.grassTufts}>
+            {Array.from({ length: 16 }).map((_, index) => (
+              <View key={index} style={styles.grassTufts} />
+            ))}
+          </View>
+        </View>
+        {currentLevel >= 2 && <View style={styles.groundFog} />}
+      </View>
 
       {visibleObstacles.map((obstacle) => {
         const left = Number(obstacle.x - view.cameraX);
@@ -2750,7 +3325,14 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
           case 'bench_trap':
             return <BenchTrapObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'cloud_trap':
-            return <CloudTrap key={obstacle.id} obstacle={obstacle} left={left} />;
+            return (
+              <CloudTrap
+                key={obstacle.id}
+                obstacle={obstacle}
+                left={left}
+                cracked={obstacle.cloudTrapCracked === true}
+              />
+            );
           case 'enemy':
             return (
               <EnemyObstacle
@@ -2772,6 +3354,15 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
             return <Piranha key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'spike_trap':
             return <SpikeTrap key={obstacle.id} obstacle={obstacle} left={left} />;
+          case 'portal':
+            return (
+              <Portal
+                key={obstacle.id}
+                obstacle={obstacle}
+                left={left}
+                now={view.now}
+              />
+            );
           case 'goal':
             return <Goal key={obstacle.id} obstacle={obstacle} left={left} />;
           default:
@@ -2852,10 +3443,12 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
             {
               left: Number(
                 facing === 'right'
-                  ? view.cowScreenX + COW_WIDTH - 6
-                  : view.cowScreenX - 16
+                  ? cowRenderLeft + muzzleLocalX
+                  : cowRenderLeft + cowRenderWidth - muzzleLocalX
               ),
-              bottom: Number(view.cowBottom + COW_HEIGHT * 0.45),
+              bottom: Number(
+                cowRenderBottom + cowRenderHeight - muzzleLocalYFromTop
+              ),
             },
           ]}
         />
@@ -2863,25 +3456,32 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
 
       <Cow
         facing={facing}
-        width={COW_WIDTH}
-        height={COW_HEIGHT}
+        width={cowRenderWidth}
+        height={cowRenderHeight}
         isMoving={view.isMoving}
         isJumping={!view.isGrounded}
         spriteSource={cowSprite}
         resizeMode={cowDead ? 'cover' : 'contain'}
+        weapon={cowDead ? null : cowWeapon}
         style={[
           styles.cow,
           {
-            left: Number(view.cowScreenX),
-            bottom: Number(view.cowBottom),
+            left: Number(cowRenderLeft),
+            bottom: Number(cowRenderBottom),
+            opacity: 1 - absorbEase,
           },
         ]}
       />
 
       <CurrentScore score={score} />
 
-      {/* Weapon and coins HUD */}
-      <View style={styles.hud}>
+      {/* HUD de arma y monedas: abre la armería */}
+      <Pressable
+        onPress={openShop}
+        style={({ pressed }) => [styles.hud, pressed && styles.hudPressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Abrir armería de armas"
+      >
         <View style={styles.hudWeapon}>
           <View
             style={[
@@ -2898,7 +3498,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
                 currentWeapon > 0 && styles.hudWeaponUpgraded,
               ]}
             >
-              {currentWeapon > 0 ? 'â­ ' : ''}
+              {currentWeapon > 0 ? '★ ' : ''}
               {WEAPONS[currentWeapon].name} · Nv.{currentWeapon + 1}
             </Text>
           </View>
@@ -2906,27 +3506,9 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
             <View style={styles.hudCoinDot} />
             <Text style={styles.hudCoinsText}>{coins}</Text>
           </View>
-          {currentWeapon > 0 && (
-            <Text style={styles.hudUpgradeText}>ARMA MEJORADA</Text>
-          )}
+          <Text style={styles.hudOpenHint}>ARMERÍA ▾</Text>
         </View>
-      </View>
-
-      <View style={styles.ground}>
-        <View style={styles.stoneRow}>
-          {Array.from({ length: 8 }).map((_, index) => (
-            <View key={index} style={styles.stoneBlock} />
-          ))}
-        </View>
-        <View style={styles.grass}>
-          <View style={styles.grassHighlight} />
-          <View style={styles.grassTufts}>
-            {Array.from({ length: 16 }).map((_, index) => (
-              <View key={index} style={styles.grassTufts} />
-            ))}
-          </View>
-        </View>
-      </View>
+      </Pressable>
 
       <TouchControls
         key={gameOver ? 'game-over' : 'playing'}
@@ -2938,6 +3520,136 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
         onJumpPressIn={handleJumpPressIn}
         onShootPressIn={handleShootPressIn}
       />
+
+      {/* Armería deslizante */}
+      <View
+        pointerEvents={shopOpen ? 'auto' : 'none'}
+        style={styles.shopOverlay}
+      >
+        <Animated.View style={[styles.shopBackdrop, { opacity: shopSlide }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeShop} />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.shopPanel,
+            {
+              width: shopPanelWidth,
+              transform: [
+                {
+                  translateX: shopSlide.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [shopPanelWidth, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.shopHeader}>
+            <View>
+              <Text style={styles.shopTitle}>ARMERÍA</Text>
+              <View style={styles.hudCoinRow}>
+                <View style={styles.hudCoinDot} />
+                <Text style={styles.shopCoinsText}>{coins}</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={closeShop}
+              style={({ pressed }) => [
+                styles.shopClose,
+                pressed && styles.shopClosePressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar armería"
+            >
+              <Text style={styles.shopCloseText}>✕</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.shopHint}>
+            Compra armas con monedas. Cada arma es más potente y hace más daño a
+            los jefes.
+          </Text>
+
+          <ScrollView
+            style={styles.shopList}
+            contentContainerStyle={styles.shopListContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {WEAPONS.map((weapon, index) => {
+              const isCurrent = index === currentWeapon;
+              const isOwned = ownedWeapons[index];
+              const canAfford = coins >= weapon.price;
+              // El arma de serie (0) siempre está equipada; las demás, si son la
+              // actual, se pueden desequipar.
+              const disabled = isCurrent ? index === 0 : !isOwned && !canAfford;
+              const label = isCurrent
+                ? (index === 0 ? 'EQUIPADA' : 'DESEQUIPAR')
+                : isOwned
+                  ? 'EQUIPAR'
+                  : canAfford
+                    ? 'COMPRAR'
+                    : `FALTAN ${weapon.price - coins}`;
+
+              return (
+                <View
+                  key={weapon.name}
+                  style={[styles.shopCard, isCurrent && styles.shopCardCurrent]}
+                >
+                  <Image
+                    source={weapon.sprite}
+                    style={styles.shopCardImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.shopCardInfo}>
+                    <Text style={styles.shopCardName}>
+                      {weapon.name} · Nv.{index + 1}
+                    </Text>
+                    <Text style={styles.shopCardStats}>
+                      Daño {weapon.damage} · Cadencia{' '}
+                      {Math.round(1 / weapon.cooldown)}/s
+                    </Text>
+                    <View style={styles.shopCardFooter}>
+                      <View style={styles.shopPrice}>
+                        <View style={styles.hudCoinDot} />
+                        <Text style={styles.shopPriceText}>
+                          {weapon.price === 0 ? 'GRATIS' : weapon.price}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => buyOrEquipWeapon(index)}
+                        disabled={disabled}
+                        style={({ pressed }) => [
+                          styles.shopBuyButton,
+                          isCurrent && index === 0 && styles.shopEquippedButton,
+                          isCurrent && index > 0 && styles.shopUnequipButton,
+                          disabled && !isCurrent && styles.shopBuyButtonDisabled,
+                          pressed && !disabled && styles.shopBuyButtonPressed,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${label} ${weapon.name}`}
+                        accessibilityState={{ disabled }}
+                      >
+                        <Text
+                          style={[
+                            styles.shopBuyText,
+                            disabled &&
+                              !isCurrent &&
+                              styles.shopBuyTextDisabled,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </Animated.View>
+      </View>
 
       <GameOverModal
         visible={gameOver}
@@ -3071,8 +3783,6 @@ const styles = StyleSheet.create({
   },
   cow: {
     position: 'absolute',
-    width: COW_WIDTH,
-    height: COW_HEIGHT,
   },
   obstacle: {
     position: 'absolute',
@@ -3317,6 +4027,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 4,
     borderTopColor: '#4f3f2f',
   },
+  groundNight: {
+    backgroundColor: '#2b2530',
+    borderTopColor: '#16121b',
+  },
+  groundFog: {
+    position: 'absolute',
+    top: 2,
+    left: 0,
+    right: 0,
+    height: 26,
+    backgroundColor: 'rgba(178, 156, 196, 0.10)',
+  },
   stoneRow: {
     position: 'absolute',
     top: 26,
@@ -3337,6 +4059,11 @@ const styles = StyleSheet.create({
     borderColor: '#5f4c39',
     borderTopColor: '#a8927a',
   },
+  stoneBlockNight: {
+    backgroundColor: '#3c3543',
+    borderColor: '#241f29',
+    borderTopColor: '#4d4554',
+  },
   grass: {
     position: 'absolute',
     top: 0,
@@ -3347,6 +4074,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 4,
     borderBottomColor: '#4a8c2a',
   },
+  grassNight: {
+    backgroundColor: '#3a3444',
+    borderBottomColor: '#221d28',
+  },
   grassHighlight: {
     position: 'absolute',
     top: 0,
@@ -3354,6 +4085,9 @@ const styles = StyleSheet.create({
     right: 0,
     height: 7,
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  grassHighlightNight: {
+    backgroundColor: 'rgba(196, 170, 214, 0.14)',
   },
   bullet: {
     position: 'absolute',
@@ -3554,6 +4288,178 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
     textTransform: 'uppercase',
+  },
+  hudPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  hudOpenHint: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  shopOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 40,
+    elevation: 40,
+  },
+  shopBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(4, 15, 24, 0.62)',
+  },
+  shopPanel: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(9, 27, 40, 0.97)',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(255, 225, 77, 0.65)',
+    paddingTop: 18,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: -8, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 24,
+  },
+  shopHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  shopTitle: {
+    color: '#ffe14d',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  shopCoinsText: {
+    color: '#ffe14d',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  shopClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  shopClosePressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  shopCloseText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  shopHint: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 11,
+    marginTop: 10,
+    marginBottom: 12,
+    lineHeight: 15,
+  },
+  shopList: {
+    flex: 1,
+  },
+  shopListContent: {
+    paddingBottom: 18,
+    gap: 10,
+  },
+  shopCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    padding: 10,
+    gap: 10,
+  },
+  shopCardCurrent: {
+    borderColor: '#ffe14d',
+    backgroundColor: 'rgba(255, 225, 77, 0.12)',
+  },
+  shopCardImage: {
+    width: 86,
+    height: 50,
+  },
+  shopCardInfo: {
+    flex: 1,
+  },
+  shopCardName: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  shopCardStats: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  shopCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  shopPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  shopPriceText: {
+    color: '#ffe14d',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  shopBuyButton: {
+    backgroundColor: '#ffe14d',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    minWidth: 86,
+    alignItems: 'center',
+  },
+  shopEquippedButton: {
+    backgroundColor: 'rgba(255, 225, 77, 0.25)',
+    borderWidth: 1,
+    borderColor: '#ffe14d',
+  },
+  shopUnequipButton: {
+    backgroundColor: 'rgba(255, 80, 80, 0.25)',
+    borderWidth: 1,
+    borderColor: '#ff5050',
+  },
+  shopBuyButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  shopBuyButtonPressed: {
+    opacity: 0.8,
+  },
+  shopBuyText: {
+    color: '#0a2233',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  shopBuyTextDisabled: {
+    color: 'rgba(255, 255, 255, 0.55)',
   },
   deathEffect: {
     position: 'absolute',
@@ -3778,51 +4684,35 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     transform: [{ translateX: -20 }],
   },
+  portalContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portalGlow: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: PORTAL_WIDTH / 2,
+    backgroundColor: '#b347ff',
+    shadowColor: '#ff3dbf',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  portalImgLayer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
   goalContainer: {
     position: 'absolute',
     alignItems: 'center',
+    justifyContent: 'flex-end',
   },
-  goalPole: {
-    width: 6,
-    height: GOAL_HEIGHT,
-    backgroundColor: '#bdbdbd',
-  },
-  goalFlag: {
-    position: 'absolute',
-    top: 6,
-    left: 8,
-    width: 24,
-    height: 16,
-    backgroundColor: '#e53935',
-    borderRadius: 2,
-  },
-  goalText: {
-    position: 'absolute',
-    top: -20,
-    left: '50%',
-    color: '#e53935',
-    fontSize: 12,
-    fontWeight: '900',
-    transform: [{ translateX: -50 }],
-    textShadowColor: '#000',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  savePoint: {
-    position: 'absolute',
-    bottom: -6,
-    left: '50%',
-    width: 18,
-    height: 18,
-    backgroundColor: '#ffeb3b',
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#f57f17',
-    transform: [{ translateX: -9 }],
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
+  goalImage: {
+    width: 140,
+    height: 174,
   },
 });
