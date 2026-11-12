@@ -4,6 +4,19 @@ import { Animated, Image, ImageSourcePropType, StyleProp, StyleSheet, ViewStyle 
 export const COW_WIDTH = 77;
 export const COW_HEIGHT = 66;
 
+/**
+ * Arma equipada: se dibuja encima del sprite de la vaquita, dentro del mismo
+ * contenedor animado, para que herede el volteo (facing) y el rebobinado.
+ * `left`/`top` están en dp medidos desde la esquina superior izquierda de la caja.
+ */
+export interface CowWeapon {
+  source: ImageSourcePropType;
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+}
+
 interface CowProps {
   facing?: 'left' | 'right';
   width?: number;
@@ -13,6 +26,7 @@ interface CowProps {
   rotation?: number;
   spriteSource?: ImageSourcePropType;
   resizeMode?: 'cover' | 'contain' | 'stretch' | 'center' | 'repeat';
+  weapon?: CowWeapon | null;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -25,6 +39,7 @@ export const Cow: React.FC<CowProps> = ({
   rotation = 0,
   spriteSource = require('../../../assets/caminando1.png'),
   resizeMode = 'contain',
+  weapon = null,
   style,
 }) => {
   const [bounce] = useState(() => new Animated.Value(0));
@@ -85,6 +100,23 @@ export const Cow: React.FC<CowProps> = ({
         accessible
         accessibilityLabel="Vaquita"
       />
+      {weapon ? (
+        <Image
+          source={weapon.source}
+          style={[
+            styles.weapon,
+            {
+              width: weapon.width,
+              height: weapon.height,
+              left: weapon.left,
+              top: weapon.top,
+            },
+          ]}
+          resizeMode="contain"
+          fadeDuration={0}
+          accessible={false}
+        />
+      ) : null}
     </Animated.View>
   );
 };
@@ -95,6 +127,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   image: {
+    backgroundColor: 'transparent',
+  },
+  weapon: {
+    position: 'absolute',
     backgroundColor: 'transparent',
   },
 });
