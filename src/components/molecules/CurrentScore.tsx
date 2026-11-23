@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 10,
-    zIndex: 10,
+    zIndex: 100,
   },
   scoreText: {
     color: COLORS.text,

@@ -69,8 +69,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    zIndex: 20,
-    elevation: 20,
+    zIndex: 100,
+    elevation: 100,
   },
   leftGroup: {
     flexDirection: 'row',

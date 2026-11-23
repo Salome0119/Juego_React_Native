@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Animated,
   Image,
@@ -9,11 +9,32 @@ import {
   Text,
   View,
 } from 'react-native';
+import {
+  BAT_HEIGHT,
+  BAT_HITBOX_HEIGHT,
+  BAT_HITBOX_WIDTH,
+  BAT_WIDTH,
+  BatEnemy,
+} from '../components/atoms/BatEnemy';
+import {
+  CHASE_MONSTER_HEIGHT,
+  CHASE_MONSTER_WIDTH,
+  ChaseMonster,
+  ChaseMonsterPhase,
+} from '../components/organisms/ChaseMonster';
 import { COW_HEIGHT, COW_WIDTH, Cow } from '../components/atoms/Cow';
 import { Enemy, BOSS_ASPECT_RATIO, ENEMY_ASPECT_RATIO, PIRANHA_ASPECT_RATIO, getEnemySpriteSize } from '../components/atoms/Enemy';
 import { CurrentScore } from '../components/molecules/CurrentScore';
 import { TouchControls } from '../components/molecules/TouchControls';
 import { GameOverModal } from '../components/organisms/GameOverModal';
+import {
+  getMudLogLeft,
+  getMudLogTop,
+  MUD_TRAP_LOG_HEIGHT,
+  MUD_TRAP_LOG_WIDTH,
+  MUD_TRAP_SINK_DURATION,
+  MudTrapZone,
+} from '../components/organisms/MudTrapZone';
 import { COLORS, SCREEN_HEIGHT, SCREEN_WIDTH } from '../constants/theme';
 
 const FALLBACK_SCREEN_WIDTH = 360;
@@ -21,14 +42,110 @@ const FALLBACK_SCREEN_HEIGHT = 640;
 
 const PLAYER_START_X = 50;
 const GROUND_HEIGHT = 100;
+
+const ASCENT_STEP_COUNT = 5;
+const ASCENT_STEP_WIDTH = 190;
+const ASCENT_STEP_HEIGHT = 100;
+const ASCENT_STEP_GAP = 55;
+const ASCENT_START_X = 460;
+const MAX_STEP_CLIMB = 110;
+const PISO_FLOTANTE_SURFACE = 0.43;
+const PISO_FLOTANTE_ASPECT = 554 / 450;
+const UPPER_ROUTE_SEGMENT_WIDTH = 420;
+const UPPER_ROUTE_SEGMENT_STEP = 380;
+const UPPER_ROUTE_SEGMENT_COUNT = 4;
+const UPPER_ROUTE_THICKNESS = Math.round(
+  UPPER_ROUTE_SEGMENT_WIDTH / PISO_FLOTANTE_ASPECT
+);
+const UPPER_ROUTE_TOP = Math.min(
+  Math.max(GROUND_HEIGHT + UPPER_ROUTE_THICKNESS + 40, SCREEN_HEIGHT - 300),
+  GROUND_HEIGHT + ASCENT_STEP_COUNT * MAX_STEP_CLIMB
+);
+const UPPER_ROUTE_BOTTOM = UPPER_ROUTE_TOP - UPPER_ROUTE_THICKNESS;
+const UPPER_ROUTE_START_X =
+  ASCENT_START_X +
+  (ASCENT_STEP_COUNT - 1) * (ASCENT_STEP_WIDTH + ASCENT_STEP_GAP) +
+  ASCENT_STEP_WIDTH -
+  10;
+const UPPER_ROUTE_END_X =
+  UPPER_ROUTE_START_X +
+  (UPPER_ROUTE_SEGMENT_COUNT - 1) * UPPER_ROUTE_SEGMENT_STEP +
+  UPPER_ROUTE_SEGMENT_WIDTH;
+const BAT_TRIGGER_STEP_INDEX = 3;
+const BAT_TRIGGER_X =
+  ASCENT_START_X + BAT_TRIGGER_STEP_INDEX * (ASCENT_STEP_WIDTH + ASCENT_STEP_GAP);
+const BAT_TRIGGER_WIDTH = 520;
+const BAT_TRIGGER_BOTTOM =
+  GROUND_HEIGHT +
+  ((UPPER_ROUTE_TOP - GROUND_HEIGHT) * (BAT_TRIGGER_STEP_INDEX + 1)) /
+    ASCENT_STEP_COUNT;
+const BAT_TRIGGER_HEIGHT = UPPER_ROUTE_TOP - BAT_TRIGGER_BOTTOM + 160;
+const batSpawnBottom = (offset: number): number =>
+  Math.min(UPPER_ROUTE_TOP + offset, SCREEN_HEIGHT - BAT_HEIGHT - 14);
+const ESPINAS_TEXTURE = { width: 499, height: 461, topRow: 126, bottomRow: 382 };
+const PISO_VISIBLE_BOTTOM_OFFSET = Math.round(
+  UPPER_ROUTE_THICKNESS * (1 - PISO_FLOTANTE_SURFACE)
+);
+const ESPINAS_TOP_Y = UPPER_ROUTE_TOP - PISO_VISIBLE_BOTTOM_OFFSET;
+const ESPINAS_GAP_HEIGHT = Math.max(40, ESPINAS_TOP_Y - GROUND_HEIGHT);
+const ESPINAS_SCALE =
+  ESPINAS_GAP_HEIGHT / (ESPINAS_TEXTURE.bottomRow - ESPINAS_TEXTURE.topRow);
+const ESPINAS_IMAGE_WIDTH = ESPINAS_TEXTURE.width * ESPINAS_SCALE;
+const ESPINAS_IMAGE_HEIGHT = ESPINAS_TEXTURE.height * ESPINAS_SCALE;
+const ESPINAS_BOTTOM_TRIM =
+  (ESPINAS_TEXTURE.height - ESPINAS_TEXTURE.bottomRow) * ESPINAS_SCALE;
+const UNDER_FLOOR_SPINES_X =
+  UPPER_ROUTE_START_X +
+  ((UPPER_ROUTE_SEGMENT_COUNT - 1) * UPPER_ROUTE_SEGMENT_STEP +
+    UPPER_ROUTE_SEGMENT_WIDTH -
+    ESPINAS_IMAGE_WIDTH) /
+    2;
+
+const BAT_CHASE_SPEED = 130;
+const BAT_CHASE_OFFSET_Y = 18;
+const WAVE2_BAT_HOVER_OFFSET = 42;
+const WAVE2_BAT_SPAWN_INTERVAL_MS = 2600;
+const WAVE2_BAT_MAX_ACTIVE = 2;
+const BAT_BULLET_TOLERANCE_Y = 18;
+
+const CHASE_TRIGGER_X = UPPER_ROUTE_START_X + 1050;
+const CHASE_TRIGGER_WIDTH = 1600;
+const CHASE_TRIGGER_HEIGHT = UPPER_ROUTE_TOP - GROUND_HEIGHT;
+const CHASE_SPEED = 190;
+const BOSS_MAX_HP = 20;
+const CHASE_MONSTER_HP = BOSS_MAX_HP;
+const CHASE_MONSTER_DROP_MS = 900;
+const CHASE_MONSTER_HITBOX_WIDTH = 190;
+const CHASE_MONSTER_HITBOX_HEIGHT = 210;
+const CHASE_SPIKE_WIDTH = 92;
+const CHASE_SPIKE_HEIGHT = 64;
+const CHASE_SPIKE_WARNING_MS = 650;
+const FIREBALL_SPEED = 360;
+const FIREBALL_COOLDOWN_MS = 1700;
+const FIREBALL_RANGE = 900;
+const FIREBALL_RADIUS = 13;
+const FIREBALL_VISUAL_WIDTH = 46;
+const FIREBALL_VISUAL_HEIGHT = 22;
+const FIREBALL_HIT_WIDTH = 30;
+const FIREBALL_HIT_HEIGHT = 18;
+const FIREBALL_SPAWN_OFFSET_Y = 90;
+const FIREBALL_MAX_VERTICAL_GAP = 220;
+const CHASE_SECTION_START = UPPER_ROUTE_START_X + 1500;
+const CHASE_PORTAL_X = CHASE_SECTION_START + 1250;
+const BOSS_GATE_WIDTH = 90;
+const BOSS_GATE_HEIGHT = Math.min(200, UPPER_ROUTE_BOTTOM - GROUND_HEIGHT);
+const BOSS_GATE_X = CHASE_PORTAL_X - 80;
+
 const MOVE_SPEED = 265;
 const AIR_MOVE_SPEED = 305;
 const GRAVITY = 1900;
 const JUMP_SPEED = 720;
 const MAX_FALL_SPEED = 950;
-const APEX_VELOCITY_THRESHOLD = 140;
-const APEX_GRAVITY_FACTOR = 0.55;
+const APEX_VELOCITY_THRESHOLD = 100;
+const APEX_GRAVITY_FACTOR = 0.85;
 const MAX_JUMPS = 2;
+const MAX_LIVES = 3;
+const INVULNERABILITY_MS = 1300;
 const CAMERA_OFFSET_X = SCREEN_WIDTH * 0.32;
 const INITIAL_NEXT_OBSTACLE_X = 1380;
 const OBSTACLE_GAP_MIN = 380;
@@ -72,6 +189,9 @@ const COIN_COLLECT_RADIUS = 22;
 // Agua / fosas
 const WATER_HEIGHT = 90;
 
+// Trampa de lodo
+const MUD_TRAP_SAFE_MARGIN = 30;
+
 // Trampa con pinchos
 const TRAP_ARM_DELAY = 0.3; // segundos antes de activar pinchos
 
@@ -107,6 +227,17 @@ const IMG_CLOUD = require('../../assets/nubes.png');
 const IMG_CLOUD_TRAP = require('../../assets/nube_trampa.png');
 const IMG_LAKE = require('../../assets/lago_trampa.png');
 const IMG_MONSTER_GREEN_ANGRY = require('../../assets/monster-green_enojado.png');
+
+const IMG_ESCALERAS = [
+  require('../../assets/escalera1.png'),
+  require('../../assets/escalera2.png'),
+  require('../../assets/escalera3.png'),
+  require('../../assets/escalera4.png'),
+];
+const IMG_PISO_FLOTANTE = require('../../assets/pisoflotante.png');
+const IMG_ESPINAS = require('../../assets/espinas.png');
+const IMG_ESCALERA_ASPECTS = [398 / 206, 387 / 227, 355 / 235, 249 / 213];
+const IMG_ESCALERA_SURFACES = [0.46, 0.38, 0.4, 0.4];
 
 // Portal entre niveles y fondos por nivel
 const IMG_PORTAL_1 = require('../../assets/portal_movimiento1.png');
@@ -339,6 +470,14 @@ const WEAPONS: WeaponConfig[] = [
   },
 ];
 
+interface CarriedProgress {
+  coins: number;
+  ownedWeapons: boolean[];
+  weapon: number;
+}
+
+let carriedProgress: CarriedProgress | null = null;
+
 // ---- Sistema de Niveles ----
 interface LevelConfig {
   id: number;
@@ -350,6 +489,144 @@ interface LevelConfig {
   // Si es false, no se generan obstáculos procedimentales en este nivel.
   procedural?: boolean;
 }
+
+const UPPER_ROUTE_OBSTACLES: InitialObstacleSpec[] = [
+  ...Array.from({ length: ASCENT_STEP_COUNT }, (_, index) => {
+    const top =
+      GROUND_HEIGHT +
+      ((UPPER_ROUTE_TOP - GROUND_HEIGHT) * (index + 1)) / ASCENT_STEP_COUNT;
+    return {
+      type: 'upper_platform' as const,
+      x: ASCENT_START_X + index * (ASCENT_STEP_WIDTH + ASCENT_STEP_GAP),
+      bottom: top - ASCENT_STEP_HEIGHT,
+      width: ASCENT_STEP_WIDTH,
+      height: ASCENT_STEP_HEIGHT,
+      visualKind: 'escalera' as const,
+      visualIndex: index % IMG_ESCALERAS.length,
+      collisionInsetX: 18,
+    };
+  }),
+  ...Array.from({ length: UPPER_ROUTE_SEGMENT_COUNT }, (_, index) => ({
+    type: 'upper_platform' as const,
+    x: UPPER_ROUTE_START_X + index * UPPER_ROUTE_SEGMENT_STEP,
+    bottom: UPPER_ROUTE_BOTTOM,
+    width: UPPER_ROUTE_SEGMENT_WIDTH,
+    height: UPPER_ROUTE_THICKNESS,
+    visualKind: 'pisoflotante' as const,
+  })),
+  {
+    type: 'floor_spines' as const,
+    x: UNDER_FLOOR_SPINES_X,
+    bottom: GROUND_HEIGHT,
+    width: ESPINAS_IMAGE_WIDTH,
+    height: ESPINAS_GAP_HEIGHT,
+  },
+  {
+    type: 'spines_barrier' as const,
+    x: UNDER_FLOOR_SPINES_X + ESPINAS_IMAGE_WIDTH - 40,
+    bottom: GROUND_HEIGHT,
+    width: ESPINAS_IMAGE_WIDTH,
+    height: ESPINAS_GAP_HEIGHT,
+  },
+  {
+    type: 'floor_spines' as const,
+    x: BOSS_GATE_X - ESPINAS_IMAGE_WIDTH - 40,
+    bottom: GROUND_HEIGHT,
+    width: ESPINAS_IMAGE_WIDTH,
+    height: ESPINAS_GAP_HEIGHT,
+  },
+  {
+    type: 'bat_trigger' as const,
+    x: BAT_TRIGGER_X,
+    bottom: BAT_TRIGGER_BOTTOM,
+    width: BAT_TRIGGER_WIDTH,
+    height: BAT_TRIGGER_HEIGHT,
+  },
+  {
+    type: 'bat' as const,
+    x: UPPER_ROUTE_START_X + 290,
+    bottom: batSpawnBottom(55),
+    width: BAT_WIDTH,
+    height: BAT_HEIGHT,
+    batWave: 1 as const,
+  },
+  {
+    type: 'bat' as const,
+    x: UPPER_ROUTE_START_X + 740,
+    bottom: batSpawnBottom(95),
+    width: BAT_WIDTH,
+    height: BAT_HEIGHT,
+    batWave: 1 as const,
+  },
+  {
+    type: 'bat' as const,
+    x: UPPER_ROUTE_START_X + 1160,
+    bottom: batSpawnBottom(45),
+    width: BAT_WIDTH,
+    height: BAT_HEIGHT,
+    batWave: 1 as const,
+  },
+];
+
+const CHASE_OBSTACLES: InitialObstacleSpec[] = [
+  {
+    type: 'chase_trigger' as const,
+    x: CHASE_TRIGGER_X,
+    bottom: GROUND_HEIGHT,
+    width: CHASE_TRIGGER_WIDTH,
+    height: CHASE_TRIGGER_HEIGHT,
+  },
+  ...[0, 1, 2].map((index) => ({
+    type: 'bat' as const,
+    x: CHASE_SECTION_START + 180 + index * 520,
+    bottom: Math.min(
+      GROUND_HEIGHT + 170 + index * 70,
+      SCREEN_HEIGHT - BAT_HEIGHT - 14
+    ),
+    width: BAT_WIDTH,
+    height: BAT_HEIGHT,
+    batWave: 2 as const,
+  })),
+  ...[
+    { x: CHASE_SECTION_START + 320, bottom: GROUND_HEIGHT },
+    { x: CHASE_SECTION_START + 900, bottom: GROUND_HEIGHT },
+  ].map((anchor) => ({
+    type: 'chase_spike' as const,
+    x: anchor.x,
+    bottom: anchor.bottom,
+    width: CHASE_SPIKE_WIDTH,
+    height: CHASE_SPIKE_HEIGHT,
+  })),
+  ...[
+    { x: CHASE_SECTION_START + 320, bottom: GROUND_HEIGHT + 90 },
+    { x: CHASE_SECTION_START + 620, bottom: GROUND_HEIGHT + 150 },
+    { x: CHASE_SECTION_START + 920, bottom: GROUND_HEIGHT + 210 },
+  ].map((anchor) => ({
+    type: 'upper_platform' as const,
+    x: anchor.x,
+    bottom: anchor.bottom,
+    width: 220,
+    height: 80,
+    visualKind: 'pisoflotante' as const,
+    extraWidth: 140,
+  })),
+  {
+    type: 'boss_gate' as const,
+    x: BOSS_GATE_X,
+    bottom: GROUND_HEIGHT,
+    width: BOSS_GATE_WIDTH,
+    height: BOSS_GATE_HEIGHT,
+    active: true,
+  },
+  {
+    type: 'portal' as const,
+    x: CHASE_PORTAL_X,
+    bottom: GROUND_HEIGHT,
+    width: PORTAL_WIDTH,
+    height: PORTAL_HEIGHT,
+    portalLocked: true,
+  },
+];
 
 const LEVELS: LevelConfig[] = [
   {
@@ -382,7 +659,7 @@ obstacles: [
     name: 'Nivel 2',
     width: 3200,
     procedural: false,
-    obstacles: [],
+    obstacles: [...UPPER_ROUTE_OBSTACLES, ...CHASE_OBSTACLES],
   },
 ];
 
@@ -405,6 +682,17 @@ type ObstacleType =
   | 'stone_trap'
   | 'bench_trap'
   | 'cloud_trap'
+  | 'mud_trap'
+  | 'mud_log'
+  | 'upper_platform'
+  | 'bat_trigger'
+  | 'bat'
+  | 'chase_trigger'
+  | 'chase_monster'
+  | 'chase_spike'
+  | 'floor_spines'
+  | 'spines_barrier'
+  | 'boss_gate'
   | 'portal'
   | 'goal';
 
@@ -463,8 +751,32 @@ interface Obstacle {
   cloudTrapCracked?: boolean;
   cloudTrapCrackTime?: number;
   vanished?: boolean;
+  // Trampa de lodo
+  mudTriggered?: boolean;
+  // Ruta alta y murciélagos
+  triggerFired?: boolean;
+  batAwake?: boolean;
+  batWave?: 1 | 2;
+  active?: boolean;
+  batHomeX?: number;
+  batHomeBottom?: number;
+  visualKind?: 'escalera' | 'pisoflotante';
+  visualIndex?: number;
+  collisionInsetX?: number;
+  extraWidth?: number;
+  // Secuencia final del nivel 2
+  portalLocked?: boolean;
   // Meta
   isGoal?: boolean;
+}
+
+interface Fireball {
+  id: number;
+  x: number;
+  originX: number;
+  baseY: number;
+  y: number;
+  vx: number;
 }
 
 interface Bullet {
@@ -501,6 +813,13 @@ interface InitialObstacleSpec {
   height: number;
   bottom?: number;
   isBoss?: boolean;
+  visualKind?: 'escalera' | 'pisoflotante';
+  visualIndex?: number;
+  collisionInsetX?: number;
+  extraWidth?: number;
+  portalLocked?: boolean;
+  batWave?: 1 | 2;
+  active?: boolean;
 }
 
 interface TerrainSegment {
@@ -772,6 +1091,130 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
         });
         break;
       }
+      case 'mud_trap': {
+        obstacles.push({
+          id: id++,
+          type: 'mud_trap',
+          x: spec.x,
+          bottom: 0,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+          mudTriggered: false,
+        });
+        obstacles.push({
+          id: id++,
+          type: 'mud_log',
+          x: getMudLogLeft(spec.x, spec.width),
+          bottom: getMudLogTop(GROUND_HEIGHT) - MUD_TRAP_LOG_HEIGHT,
+          width: MUD_TRAP_LOG_WIDTH,
+          height: MUD_TRAP_LOG_HEIGHT,
+          scored: false,
+        });
+        break;
+      }
+      case 'upper_platform': {
+        obstacles.push({
+          id: id++,
+          type: 'upper_platform',
+          x: spec.x,
+          bottom: spec.bottom ?? UPPER_ROUTE_BOTTOM,
+          width: spec.width + (spec.extraWidth ?? 0),
+          height: spec.height,
+          scored: false,
+          visualKind: spec.visualKind,
+          visualIndex: spec.visualIndex,
+          collisionInsetX: spec.collisionInsetX,
+        });
+        break;
+      }
+      case 'bat_trigger': {
+        obstacles.push({
+          id: id++,
+          type: 'bat_trigger',
+          x: spec.x,
+          bottom: spec.bottom ?? UPPER_ROUTE_TOP,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+          triggerFired: false,
+        });
+        break;
+      }
+      case 'bat': {
+        const batBottom = spec.bottom ?? UPPER_ROUTE_TOP;
+        obstacles.push({
+          id: id++,
+          type: 'bat',
+          x: spec.x,
+          bottom: batBottom,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+          batAwake: false,
+          active: false,
+          batWave: spec.batWave,
+          batHomeX: spec.x,
+          batHomeBottom: batBottom,
+          vx: 0,
+          vy: 0,
+          facing: 'left',
+          health: 3,
+        });
+        break;
+      }
+      case 'chase_trigger': {
+        obstacles.push({
+          id: id++,
+          type: 'chase_trigger',
+          x: spec.x,
+          bottom: spec.bottom ?? GROUND_HEIGHT,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+          triggerFired: false,
+        });
+        break;
+      }
+      case 'floor_spines':
+      case 'spines_barrier': {
+        obstacles.push({
+          id: id++,
+          type: spec.type,
+          x: spec.x,
+          bottom: spec.bottom ?? GROUND_HEIGHT,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+        });
+        break;
+      }
+      case 'chase_spike': {
+        obstacles.push({
+          id: id++,
+          type: 'chase_spike',
+          x: spec.x,
+          bottom: spec.bottom ?? GROUND_HEIGHT,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+          spikeTrapVisible: false,
+        });
+        break;
+      }
+      case 'boss_gate': {
+        obstacles.push({
+          id: id++,
+          type: 'boss_gate',
+          x: spec.x,
+          bottom: spec.bottom ?? GROUND_HEIGHT,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+          active: spec.active ?? true,
+        });
+        break;
+      }
       case 'water': {
         obstacles.push({
           id: id++,
@@ -793,6 +1236,7 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
           width: spec.width,
           height: spec.height,
           scored: false,
+          portalLocked: spec.portalLocked ?? false,
         });
         break;
       }
@@ -869,6 +1313,19 @@ const createLevelCoins = (levelId: number): Coin[] => {
     if (spec.type === 'crate') {
       placeCoin(spec.x + spec.width / 2 - COIN_WIDTH / 2, GROUND_HEIGHT + spec.height + 10);
     }
+    if (spec.type === 'upper_platform') {
+      const surface = (spec.bottom ?? GROUND_HEIGHT) + spec.height;
+      const count = spec.visualKind === 'escalera' ? 1 : 2;
+      for (let i = 0; i < count; i++) {
+        const offset = count === 1 ? 0 : (i - 0.5) * 70;
+        placeCoin(spec.x + spec.width / 2 + offset - COIN_WIDTH / 2, surface + 16);
+      }
+    }
+    if (spec.type === 'portal' && spec.portalLocked) {
+      for (let i = 0; i < 5; i++) {
+        placeCoin(spec.x + i * 24 - 40, GROUND_HEIGHT + 20);
+      }
+    }
   }
 
   // Monedas hacia la meta
@@ -940,6 +1397,10 @@ const SOLID_BLOCKING_TYPES: ObstacleType[] = [
   'stone_trap',
   'bench_trap',
   'cloud_trap',
+  'mud_log',
+  'upper_platform',
+  'boss_gate',
+  'spines_barrier',
 ];
 
 interface CollisionBody {
@@ -949,9 +1410,11 @@ interface CollisionBody {
   height: number;
 }
 
-// Una nube trampa ya destruida deja de colisionar y de dibujarse.
+// Una nube trampa ya destruida o la barrera del jefe ya vencida dejan de
+// colisionar y de dibujarse.
 const isVanishedObstacle = (obstacle: Obstacle): boolean =>
-  obstacle.type === 'cloud_trap' && obstacle.vanished === true;
+  (obstacle.type === 'cloud_trap' && obstacle.vanished === true) ||
+  (obstacle.type === 'boss_gate' && obstacle.active !== true);
 
 interface HorizontalResolution {
   x: number;
@@ -970,6 +1433,19 @@ interface HorizontalResolution {
  *   movimiento. Sin esto, un cuerpo que quedase dentro atravesaba el bloque
  *   sin volver a chocar contra él.
  */
+const getObstacleCollisionRect = (obstacle: Obstacle): Rect => {
+  const inset = Math.min(
+    obstacle.collisionInsetX ?? 0,
+    Math.max(0, obstacle.width / 2 - 4)
+  );
+  return {
+    x: obstacle.x + inset,
+    bottom: obstacle.bottom,
+    width: obstacle.width - inset * 2,
+    height: obstacle.height,
+  };
+};
+
 const resolveHorizontalCollision = (
   body: CollisionBody,
   targetX: number,
@@ -1001,8 +1477,9 @@ const resolveHorizontalCollision = (
       continue;
     }
 
-    const obstacleLeft = obstacle.x;
-    const obstacleRight = obstacle.x + obstacle.width;
+    const collisionRect = getObstacleCollisionRect(obstacle);
+    const obstacleLeft = collisionRect.x;
+    const obstacleRight = collisionRect.x + collisionRect.width;
     const startInside =
       startX + body.width > obstacleLeft && startX < obstacleRight;
     const endInside = x + body.width > obstacleLeft && x < obstacleRight;
@@ -1095,7 +1572,12 @@ const getSupportBottom = (
 
   for (const obstacle of obstacles) {
     const solid = SOLID_BLOCKING_TYPES.includes(obstacle.type);
-    if (!solid || isVanishedObstacle(obstacle) || !hasHorizontalOverlap(x, width, obstacle, 6)) {
+    if (
+      !solid ||
+      obstacle.type === 'spines_barrier' ||
+      isVanishedObstacle(obstacle) ||
+      !hasHorizontalOverlap(x, width, getObstacleCollisionRect(obstacle), 6)
+    ) {
       continue;
     }
 
@@ -1131,6 +1613,22 @@ const getBossCollisionBox = (obstacle: Obstacle): Rect => {
       bottom: obstacle.bottom,
       width: spriteWidth,
       height: PIRANHA_HEIGHT,
+    };
+  }
+  if (obstacle.type === 'bat') {
+    return {
+      x: obstacle.x + (obstacle.width - BAT_HITBOX_WIDTH) / 2,
+      bottom: obstacle.bottom + (obstacle.height - BAT_HITBOX_HEIGHT) / 2,
+      width: BAT_HITBOX_WIDTH,
+      height: BAT_HITBOX_HEIGHT,
+    };
+  }
+  if (obstacle.type === 'chase_monster') {
+    return {
+      x: obstacle.x + (obstacle.width - CHASE_MONSTER_HITBOX_WIDTH) / 2,
+      bottom: obstacle.bottom + (obstacle.height - CHASE_MONSTER_HITBOX_HEIGHT) / 2,
+      width: CHASE_MONSTER_HITBOX_WIDTH,
+      height: CHASE_MONSTER_HITBOX_HEIGHT,
     };
   }
   const sprite = getEnemySpriteSize(
@@ -1211,8 +1709,8 @@ const StoneTrapObstacle = React.memo(function StoneTrapObstacle({
 const BenchTrapObstacle = React.memo(function BenchTrapObstacle({
   obstacle,
   left,
-}: ObstacleViewProps) {
-  const active = obstacle.benchTrapActive === true;
+  active,
+}: ObstacleViewProps & { active: boolean }) {
   return (
     <View
       style={[
@@ -1439,6 +1937,175 @@ const TrapPlatform = React.memo(function TrapPlatform({
   );
 });
 
+const UpperRoutePlatform = React.memo(function UpperRoutePlatform({
+  obstacle,
+  left,
+}: PlatformViewProps) {
+  const isStep = obstacle.visualKind === 'escalera';
+  const stepIndex = (obstacle.visualIndex ?? 0) % IMG_ESCALERAS.length;
+  const aspect = isStep ? IMG_ESCALERA_ASPECTS[stepIndex] : PISO_FLOTANTE_ASPECT;
+  const surface = isStep ? IMG_ESCALERA_SURFACES[stepIndex] : PISO_FLOTANTE_SURFACE;
+  const drawnHeight = Math.min(obstacle.height, obstacle.width / aspect);
+  const surfaceShift =
+    obstacle.height / 2 + drawnHeight * (surface - 0.5);
+  const source = isStep ? IMG_ESCALERAS[stepIndex] : IMG_PISO_FLOTANTE;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: Number(left),
+        bottom: Number(obstacle.bottom),
+        width: obstacle.width,
+        height: obstacle.height,
+        zIndex: isStep ? 2 : 1,
+      }}
+    >
+      <Image
+        source={source}
+        style={{
+          position: 'absolute',
+          left: 0,
+          bottom: 0,
+          width: obstacle.width,
+          height: obstacle.height,
+          transform: [{ translateY: -surfaceShift }],
+        }}
+        resizeMode="contain"
+        fadeDuration={0}
+        accessible={false}
+      />
+    </View>
+  );
+});
+
+const BatObstacle = React.memo(function BatObstacle({
+  obstacle,
+  left,
+  now,
+}: ObstacleViewProps & { now: number }) {
+  return (
+    <View
+      style={[
+        styles.obstacle,
+        {
+          left: Number(left),
+          bottom: Number(obstacle.bottom),
+          width: obstacle.width,
+          height: obstacle.height,
+          zIndex: 4,
+        },
+      ]}
+    >
+      <BatEnemy
+        awake={obstacle.batAwake === true}
+        facing={obstacle.facing ?? 'left'}
+        now={now}
+        width={obstacle.width}
+        height={obstacle.height}
+      />
+    </View>
+  );
+});
+
+const FloorSpines = React.memo(function FloorSpines({
+  obstacle,
+  left,
+}: ObstacleViewProps) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: Number(left),
+        bottom: Number(obstacle.bottom),
+        width: obstacle.width,
+        height: obstacle.height,
+        zIndex: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <Image
+        source={IMG_ESPINAS}
+        style={{
+          position: 'absolute',
+          left: 0,
+          bottom: -ESPINAS_BOTTOM_TRIM,
+          width: ESPINAS_IMAGE_WIDTH,
+          height: ESPINAS_IMAGE_HEIGHT,
+        }}
+        resizeMode="contain"
+        fadeDuration={0}
+        accessible={false}
+      />
+    </View>
+  );
+});
+
+const BossGate = React.memo(function BossGate({
+  obstacle,
+  left,
+}: ObstacleViewProps) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: Number(left),
+        bottom: Number(obstacle.bottom),
+        width: obstacle.width,
+        height: obstacle.height,
+        zIndex: 6,
+      }}
+    >
+      <Image
+        source={IMG_ESPINAS}
+        style={{ width: obstacle.width, height: obstacle.height }}
+        resizeMode="stretch"
+        fadeDuration={0}
+        accessible={false}
+      />
+    </View>
+  );
+});
+
+const ChaseSpike = React.memo(function ChaseSpike({
+  obstacle,
+  left,
+  now,
+}: ObstacleViewProps & { now: number }) {
+  const warning = obstacle.trapTriggerTime !== undefined && !obstacle.spikeTrapVisible;
+  const pulse = warning ? 0.55 + Math.abs(Math.sin(now * 9)) * 0.45 : 0;
+
+  return (
+    <View
+      style={[
+        styles.obstacle,
+        {
+          left: Number(left),
+          bottom: Number(obstacle.bottom),
+          width: obstacle.width,
+          height: obstacle.height,
+          zIndex: 3,
+        },
+      ]}
+    >
+      <View style={styles.chaseSpikeBase} />
+      {warning && (
+        <View style={[styles.chaseSpikeWarning, { opacity: pulse }]} />
+      )}
+      {obstacle.spikeTrapVisible && (
+        <Image
+          source={IMG_SPIKES}
+          style={styles.chaseSpikeSprite}
+          resizeMode="contain"
+        />
+      )}
+    </View>
+  );
+});
+
 const WaterZone = React.memo(function WaterZone({
   obstacle,
   left,
@@ -1647,9 +2314,11 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   });
   const [facing, setFacing] = useState<Facing>('right');
   const [score, setScore] = useState(0);
-  const [coins, setCoins] = useState(0);
+  const [coins, setCoins] = useState(() => carriedProgress?.coins ?? 0);
   const [bestScore, setBestScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [lives, setLives] = useState(MAX_LIVES);
+  const [invulnerableUntil, setInvulnerableUntil] = useState(0);
   const [cowDead, setCowDead] = useState(false);
   const [levelCompleted, setLevelCompleted] = useState(false);
   const [portalAbsorb, setPortalAbsorb] = useState<{
@@ -1660,7 +2329,9 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
     portalHeight: number;
   } | null>(null);
   const [currentLevel, setCurrentLevel] = useState(1);
-  const [currentWeapon, setCurrentWeapon] = useState(0);
+  const [currentWeapon, setCurrentWeapon] = useState(
+    () => carriedProgress?.weapon ?? 0
+  );
   const [muzzleFlashBorn, setMuzzleFlashBorn] = useState(0);
   const [deathEffects, setDeathEffects] = useState<
     { x: number; y: number; born: number; id: number }[]
@@ -1689,31 +2360,64 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const obstaclesRef = useRef<Obstacle[]>(obstacles);
   const terrainRef = useRef<TerrainSegment[]>(terrain);
   const bulletsRef = useRef<Bullet[]>([]);
+  const [fireballs, setFireballs] = useState<Fireball[]>([]);
+  const fireballsRef = useRef<Fireball[]>([]);
+  const fireballIdRef = useRef(0);
+  const nextFireballShotAtRef = useRef(0);
   const floatingCoinsRef = useRef<FloatingCoin[]>([]);
   const coinsRef = useRef<Coin[]>([]);
   const bulletIdRef = useRef(0);
   const lastShotRef = useRef(0);
   const scoreRef = useRef(0);
-  const coinsRefCount = useRef(0);
-  const weaponRef = useRef(0);
+  const coinsRefCount = useRef(carriedProgress?.coins ?? 0);
+  const weaponRef = useRef(carriedProgress?.weapon ?? 0);
   const levelRef = useRef(1);
   const nextObstacleXRef = useRef(INITIAL_NEXT_OBSTACLE_X);
   const obstacleIdRef = useRef(obstacles.length);
   const gameOverRef = useRef(false);
+  const livesRef = useRef(MAX_LIVES);
+  const invulnerableUntilRef = useRef(0);
   const startLoopRef = useRef<(() => void) | null>(null);
   const deathEffectsRef = useRef<{ x: number; y: number; born: number; id: number }[]>([]);
   const deathEffectIdRef = useRef(0);
   const coinsRefState = useRef<Coin[]>([]);
   const levelCompletedRef = useRef(false);
   const portalAbsorbRef = useRef(false);
+  const mudSinkCompleteRef = useRef(false);
+  const mudSinkRef = useRef<{
+    startedAt: number;
+    startBottom: number;
+    sinkDistance: number;
+  } | null>(null);
+
+  const [monsterPhase, setMonsterPhase] = useState<ChaseMonsterPhase | 'idle'>('idle');
+  const [bossHp, setBossHp] = useState(0);
+  const [bossHpAnim] = useState(() => new Animated.Value(0));
+  const chasePhaseRef = useRef<ChaseMonsterPhase | 'idle'>('idle');
+  const chaseStartedRef = useRef(false);
+  const monsterSpawnedRef = useRef(false);
+  const chaseDropUntilRef = useRef(0);
+  const chaseGraceUntilRef = useRef(0);
+  const wave2BatNextSpawnAtRef = useRef(0);
+  const monsterDefeatAtRef = useRef(0);
+
+  const handleMudSinkComplete = useCallback(() => {
+    mudSinkCompleteRef.current = true;
+  }, []);
 
   // ---- Armería ----
   const [shopOpen, setShopOpen] = useState(false);
   const [ownedWeapons, setOwnedWeapons] = useState<boolean[]>(() =>
-    WEAPONS.map((_, i) => i === 0)
+    carriedProgress
+      ? [...carriedProgress.ownedWeapons]
+      : WEAPONS.map((_, i) => i === 0)
   );
   const shopOpenRef = useRef(false);
-  const ownedWeaponsRef = useRef<boolean[]>(WEAPONS.map((_, i) => i === 0));
+  const ownedWeaponsRef = useRef<boolean[]>(
+    carriedProgress
+      ? [...carriedProgress.ownedWeapons]
+      : WEAPONS.map((_, i) => i === 0)
+  );
   const [shopSlide] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
@@ -1724,8 +2428,16 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
     }).start();
   }, [shopOpen, shopSlide]);
 
+  useEffect(() => {
+    Animated.timing(bossHpAnim, {
+      toValue: BOSS_MAX_HP > 0 ? Math.max(0, bossHp) / BOSS_MAX_HP : 0,
+      duration: 220,
+      useNativeDriver: false,
+    }).start();
+  }, [bossHp, bossHpAnim]);
+
   const openShop = useCallback(() => {
-    if (gameOverRef.current || portalAbsorbRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current || mudSinkRef.current !== null) {
       return;
     }
     // Suelta los controles para que la vaquita no siga corriendo al volver.
@@ -1789,6 +2501,9 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
     }
 
     const updateView = () => {
+      setLives((current) =>
+        current === livesRef.current ? current : livesRef.current
+      );
       setView({
         cowScreenX: cowXRef.current - cameraXRef.current,
         cowBottom: cowBottomRef.current,
@@ -1818,6 +2533,30 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
       setBestScore((currentBest) => Math.max(currentBest, scoreRef.current));
     };
 
+    const takeDamage = (): boolean => {
+      if (
+        gameOverRef.current ||
+        levelCompletedRef.current ||
+        livesRef.current <= 0
+      ) {
+        return false;
+      }
+      const now = performance.now();
+      if (now < invulnerableUntilRef.current) {
+        return false;
+      }
+
+      livesRef.current = Math.max(0, livesRef.current - 1);
+      setLives(livesRef.current);
+      invulnerableUntilRef.current = now + INVULNERABILITY_MS;
+      setInvulnerableUntil(now + INVULNERABILITY_MS);
+
+      if (livesRef.current <= 0) {
+        triggerGameOver();
+      }
+      return true;
+    };
+
     const loop = (time: number) => {
       if (!running) {
         return;
@@ -1838,6 +2577,16 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
       if (shopOpenRef.current) {
         frameId = requestAnimationFrame(loop);
         return;
+      }
+
+      // Hundimiento de la trampa: la vaquita queda congelada mientras baja.
+      if (mudSinkRef.current !== null) {
+        leftHeldRef.current = false;
+        rightHeldRef.current = false;
+        isMovingRightRef.current = false;
+        isMovingLeftRef.current = false;
+        velocityXRef.current = 0;
+        velocityYRef.current = 0;
       }
 
       // Persistent directional state: the jump must never cancel horizontal
@@ -1905,10 +2654,338 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         }
       }
 
+      // Trampa de lodo: se activa al pisar la zona de lodo sobre el suelo.
+      // Sobre el tronco la vaquita queda a salvo.
+      if (!gameOverRef.current && !levelCompletedRef.current) {
+        const cowCenterX = cowXRef.current + COW_WIDTH / 2;
+
+        for (const obstacle of obstaclesRef.current) {
+          if (obstacle.type !== 'mud_trap' || obstacle.mudTriggered) {
+            continue;
+          }
+
+          const insideMud =
+            cowCenterX > obstacle.x && cowCenterX < obstacle.x + obstacle.width;
+          if (!insideMud) {
+            continue;
+          }
+
+          const logLeft = getMudLogLeft(obstacle.x, obstacle.width);
+          const nearLog =
+            cowCenterX >= logLeft - MUD_TRAP_SAFE_MARGIN &&
+            cowCenterX <= logLeft + MUD_TRAP_LOG_WIDTH + MUD_TRAP_SAFE_MARGIN;
+          const atMudSurface =
+            isGroundedRef.current &&
+            Math.abs(cowBottomRef.current - GROUND_HEIGHT) <= 4;
+
+          if (nearLog || !atMudSurface) {
+            continue;
+          }
+
+          obstacle.mudTriggered = true;
+          mudSinkRef.current = {
+            startedAt: time,
+            startBottom: cowBottomRef.current,
+            sinkDistance: obstacle.height,
+          };
+          velocityXRef.current = 0;
+          velocityYRef.current = 0;
+          setObstacles([...obstaclesRef.current]);
+        }
+      }
+
+      if (mudSinkCompleteRef.current) {
+        mudSinkCompleteRef.current = false;
+        const sink = mudSinkRef.current;
+        mudSinkRef.current = null;
+        if (sink) {
+          cowBottomRef.current = sink.startBottom;
+          velocityYRef.current = 0;
+          isGroundedRef.current = true;
+        }
+        takeDamage();
+      }
+
+      if (!gameOverRef.current && !levelCompletedRef.current) {
+        const cowCenterX = cowXRef.current + COW_WIDTH / 2;
+        for (let index = 0; index < obstaclesRef.current.length; index++) {
+          const trigger = obstaclesRef.current[index];
+          if (trigger.type !== 'bat_trigger' || trigger.triggerFired) {
+            continue;
+          }
+          const reachedUpperRoute =
+            cowCenterX > trigger.x &&
+            cowCenterX < trigger.x + trigger.width &&
+            cowBottomRef.current >= trigger.bottom - 12;
+          if (!reachedUpperRoute) {
+            continue;
+          }
+
+          obstaclesRef.current[index] = { ...trigger, triggerFired: true };
+          for (let batIndex = 0; batIndex < obstaclesRef.current.length; batIndex++) {
+            const bat = obstaclesRef.current[batIndex];
+            if (
+              bat.type !== 'bat' ||
+              bat.batWave !== 1 ||
+              bat.active === true
+            ) {
+              continue;
+            }
+            obstaclesRef.current[batIndex] = {
+              ...bat,
+              active: true,
+              batAwake: true,
+              vx: -BAT_CHASE_SPEED,
+              vy: 0,
+              facing: 'left',
+            };
+          }
+          setObstacles([...obstaclesRef.current]);
+        }
+      }
+
+      if (chasePhaseRef.current === 'drop' && time / 1000 >= chaseDropUntilRef.current) {
+        chasePhaseRef.current = 'chase';
+        setMonsterPhase('chase');
+      }
+
+      if (
+        !gameOverRef.current &&
+        !levelCompletedRef.current &&
+        !chaseStartedRef.current &&
+        !monsterSpawnedRef.current
+      ) {
+        for (let index = 0; index < obstaclesRef.current.length; index++) {
+          const trigger = obstaclesRef.current[index];
+          if (trigger.type !== 'chase_trigger' || trigger.triggerFired) {
+            continue;
+          }
+          const reachedZone =
+            cowXRef.current + COW_WIDTH > trigger.x - 120 &&
+            cowXRef.current < trigger.x + trigger.width + 240;
+          const leftUpperRoute =
+            cowBottomRef.current < UPPER_ROUTE_TOP - 40 ||
+            cowXRef.current > UPPER_ROUTE_END_X - 120;
+          if (!reachedZone || !leftUpperRoute) {
+            continue;
+          }
+
+          obstaclesRef.current[index] = { ...trigger, triggerFired: true };
+          chaseStartedRef.current = true;
+          monsterSpawnedRef.current = true;
+          chasePhaseRef.current = 'drop';
+          chaseDropUntilRef.current = time / 1000 + CHASE_MONSTER_DROP_MS / 1000;
+          chaseGraceUntilRef.current = time / 1000 + 2;
+          wave2BatNextSpawnAtRef.current = time / 1000 + 2;
+          setMonsterPhase('drop');
+          console.log('[Nivel 2] Persecución activada', {
+            cowX: Math.round(cowXRef.current),
+            cowBottom: Math.round(cowBottomRef.current),
+            upperRouteEnd: Math.round(UPPER_ROUTE_END_X),
+          });
+
+          const monsterId =
+            Math.max(0, ...obstaclesRef.current.map((o) => o.id)) + 1;
+          setBossHp(BOSS_MAX_HP);
+          obstaclesRef.current.push({
+            id: monsterId,
+            type: 'chase_monster',
+            x: cowXRef.current + 90,
+            bottom: GROUND_HEIGHT,
+            width: CHASE_MONSTER_WIDTH,
+            height: CHASE_MONSTER_HEIGHT,
+            scored: false,
+            health: CHASE_MONSTER_HP,
+            maxHealth: CHASE_MONSTER_HP,
+            facing: 'left',
+          });
+
+          setObstacles([...obstaclesRef.current]);
+        }
+      }
+
+      if (
+        chaseStartedRef.current &&
+        !gameOverRef.current &&
+        time / 1000 >= wave2BatNextSpawnAtRef.current
+      ) {
+        const activeWave2Count = obstaclesRef.current.filter(
+          (bat) => bat.type === 'bat' && bat.batWave === 2 && bat.active === true
+        ).length;
+
+        if (activeWave2Count < WAVE2_BAT_MAX_ACTIVE) {
+          let nextBatIndex = -1;
+          for (let batIndex = 0; batIndex < obstaclesRef.current.length; batIndex++) {
+            const bat = obstaclesRef.current[batIndex];
+            if (
+              bat.type !== 'bat' ||
+              bat.batWave !== 2 ||
+              bat.active === true
+            ) {
+              continue;
+            }
+            nextBatIndex = batIndex;
+            break;
+          }
+
+          if (nextBatIndex >= 0) {
+            const spawnX = cowXRef.current + 460;
+            const spawnBottom = Math.min(
+              GROUND_HEIGHT + 200,
+              SCREEN_HEIGHT - BAT_HEIGHT - 14
+            );
+            obstaclesRef.current[nextBatIndex] = {
+              ...obstaclesRef.current[nextBatIndex],
+              x: spawnX,
+              bottom: spawnBottom,
+              batHomeX: spawnX,
+              batHomeBottom: spawnBottom,
+              active: true,
+              batAwake: true,
+              vx: -BAT_CHASE_SPEED,
+              facing: 'left',
+            };
+            wave2BatNextSpawnAtRef.current =
+              time / 1000 + WAVE2_BAT_SPAWN_INTERVAL_MS / 1000;
+            setObstacles([...obstaclesRef.current]);
+          }
+        }
+      }
+
+      if (
+        chasePhaseRef.current === 'chase' &&
+        !gameOverRef.current &&
+        time / 1000 >= chaseGraceUntilRef.current
+      ) {
+        for (const obstacle of obstaclesRef.current) {
+          if (obstacle.type !== 'chase_monster' || obstacle.isDead) {
+            continue;
+          }
+          const dx = cowXRef.current - obstacle.x;
+          const step = CHASE_SPEED * delta;
+          if (Math.abs(dx) > step) {
+            obstacle.x += Math.sign(dx) * step;
+          }
+          obstacle.bottom = Math.max(
+            GROUND_HEIGHT,
+            GROUND_HEIGHT + Math.sin(time / 1000 * 4) * 6
+          );
+          if (Math.abs(dx) > 16) {
+            obstacle.facing = dx < 0 ? 'left' : 'right';
+          }
+
+          const facingSign = obstacle.facing === 'right' ? 1 : -1;
+          const monsterCenterX = obstacle.x + obstacle.width / 2;
+          const cowCenterX = cowXRef.current + COW_WIDTH / 2;
+          const forwardDistance = (cowCenterX - monsterCenterX) * facingSign;
+          const alignedVertical =
+            Math.abs(cowBottomRef.current - obstacle.bottom) <
+            FIREBALL_MAX_VERTICAL_GAP;
+          const nowSeconds = time / 1000;
+
+          if (
+            forwardDistance > 0 &&
+            forwardDistance < FIREBALL_RANGE &&
+            alignedVertical &&
+            nowSeconds >= nextFireballShotAtRef.current
+          ) {
+            fireballIdRef.current += 1;
+            const muzzleX =
+              monsterCenterX + facingSign * (obstacle.width / 2 + 12);
+            fireballsRef.current.push({
+              id: fireballIdRef.current,
+              x: muzzleX,
+              originX: muzzleX,
+              baseY: obstacle.bottom + FIREBALL_SPAWN_OFFSET_Y,
+              y: obstacle.bottom + FIREBALL_SPAWN_OFFSET_Y,
+              vx: facingSign * FIREBALL_SPEED,
+            });
+            nextFireballShotAtRef.current =
+              nowSeconds + FIREBALL_COOLDOWN_MS / 1000;
+            setFireballs([...fireballsRef.current]);
+          }
+        }
+      }
+
+      if (fireballsRef.current.length > 0) {
+        const originalCount = fireballsRef.current.length;
+        const cowHitbox = cowRect(cowXRef.current, cowBottomRef.current);
+        const remainingFireballs: Fireball[] = [];
+
+        for (const fireball of fireballsRef.current) {
+          fireball.x += fireball.vx * delta;
+          fireball.y =
+            fireball.baseY + Math.sin(time / 1000 * 7 + fireball.id) * 8;
+
+          const fireballRect: Rect = {
+            x: fireball.x - FIREBALL_HIT_WIDTH / 2,
+            bottom: fireball.y - FIREBALL_HIT_HEIGHT / 2,
+            width: FIREBALL_HIT_WIDTH,
+            height: FIREBALL_HIT_HEIGHT,
+          };
+
+          if (aabbOverlap(fireballRect, cowHitbox)) {
+            takeDamage();
+            continue;
+          }
+
+          const outOfRange =
+            Math.abs(fireball.x - fireball.originX) > FIREBALL_RANGE;
+          const outOfView =
+            fireball.x < cameraXRef.current - 400 ||
+            fireball.x > cameraXRef.current + screenWidth + 400;
+          if (outOfRange || outOfView) {
+            continue;
+          }
+          remainingFireballs.push(fireball);
+        }
+
+        fireballsRef.current = remainingFireballs;
+        if (remainingFireballs.length !== originalCount) {
+          setFireballs([...remainingFireballs]);
+        }
+      }
+
+      if (
+        chasePhaseRef.current === 'defeated' &&
+        monsterDefeatAtRef.current > 0 &&
+        time / 1000 - monsterDefeatAtRef.current > 0.5
+      ) {
+        monsterDefeatAtRef.current = 0;
+        fireballsRef.current = [];
+        setFireballs([]);
+        obstaclesRef.current = obstaclesRef.current.filter(
+          (o) => o.type !== 'chase_monster'
+        );
+        setObstacles([...obstaclesRef.current]);
+      }
+
+      if (chaseStartedRef.current && !gameOverRef.current) {
+        for (const obstacle of obstaclesRef.current) {
+          if (obstacle.type !== 'chase_spike') {
+            continue;
+          }
+          const dx = obstacle.x - cowXRef.current;
+          if (dx > 300 || dx < -obstacle.width - 60) {
+            continue;
+          }
+          if (obstacle.trapTriggerTime === undefined) {
+            obstacle.trapTriggerTime = time / 1000;
+            setObstacles([...obstaclesRef.current]);
+          } else if (
+            !obstacle.spikeTrapVisible &&
+            time / 1000 - obstacle.trapTriggerTime >= CHASE_SPIKE_WARNING_MS / 1000
+          ) {
+            obstacle.spikeTrapVisible = true;
+            setObstacles([...obstaclesRef.current]);
+          }
+        }
+      }
+
       // Portal: al tocarlo, absorbe a la vaquita y la lleva al siguiente nivel.
       if (!gameOverRef.current && !portalAbsorbRef.current) {
         for (const obstacle of obstaclesRef.current) {
-          if (obstacle.type !== 'portal') {
+          if (obstacle.type !== 'portal' || obstacle.portalLocked) {
             continue;
           }
           const touchesPortal =
@@ -2009,8 +3086,14 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           for (const obstacle of obstaclesRef.current) {
             if (
               !SOLID_BLOCKING_TYPES.includes(obstacle.type) ||
+              obstacle.type === 'spines_barrier' ||
               isVanishedObstacle(obstacle) ||
-              !hasHorizontalOverlap(cowXRef.current, COW_WIDTH, obstacle, 6)
+              !hasHorizontalOverlap(
+                cowXRef.current,
+                COW_WIDTH,
+                getObstacleCollisionRect(obstacle),
+                6
+              )
             ) {
               continue;
             }
@@ -2136,6 +3219,42 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         }
       }
 
+      for (const obstacle of obstaclesRef.current) {
+        if (obstacle.type !== 'bat' || obstacle.active !== true) {
+          continue;
+        }
+
+        const batSpeed = BAT_CHASE_SPEED + (obstacle.id % 3) * 20;
+        if (obstacle.batAwake !== true) {
+          const homeX = obstacle.batHomeX ?? obstacle.x;
+          const homeBottom = obstacle.batHomeBottom ?? obstacle.bottom;
+          const phase = time / 1000 + obstacle.id;
+          obstacle.x = Math.max(0, homeX + Math.sin(phase * 0.9) * 45);
+          obstacle.bottom = homeBottom + Math.sin(phase * 2.2) * 12;
+          obstacle.facing = Math.cos(phase * 0.9) < 0 ? 'left' : 'right';
+          continue;
+        }
+
+        const targetX = cowXRef.current + COW_WIDTH / 2 - obstacle.width / 2;
+        const hoverWave = Math.sin(time / 1000 * 4 + obstacle.id) * 6;
+        const hoverOffset =
+          obstacle.batWave === 2 ? WAVE2_BAT_HOVER_OFFSET : BAT_CHASE_OFFSET_Y;
+        const targetBottom = cowBottomRef.current + hoverOffset + hoverWave;
+        const deltaX = targetX - obstacle.x;
+        const deltaY = targetBottom - obstacle.bottom;
+        const distance = Math.hypot(deltaX, deltaY);
+        if (distance < 1) {
+          continue;
+        }
+
+        const step = Math.min(batSpeed * delta, distance);
+        obstacle.x = Math.max(0, obstacle.x + (deltaX / distance) * step);
+        obstacle.bottom += (deltaY / distance) * step;
+        obstacle.facing = deltaX < 0 ? 'left' : 'right';
+        obstacle.vx = (deltaX / distance) * batSpeed;
+        obstacle.vy = (deltaY / distance) * batSpeed;
+      }
+
       // Update trap platforms, piranhas, and goal.
       for (const obstacle of obstaclesRef.current) {
 
@@ -2155,7 +3274,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
             const now = performance.now() / 1000;
             if (now - obstacle.trapTriggerTime >= TRAP_ARM_DELAY) {
               obstacle.trapTriggered = true;
-              triggerGameOver();
+              takeDamage();
             }
           } else if (obstacle.trapTriggerTime !== undefined) {
             // Se soltÃ³ antes de armar: resetear
@@ -2244,11 +3363,27 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         const benchRight = obstacle.x + obstacle.width;
         const benchTop = obstacle.bottom + obstacle.height;
 
-        obstacle.benchTrapActive =
+        const standingOnBench =
           cowRight > benchLeft &&
           cowLeft < benchRight &&
           cowBottomRef.current >= benchTop - 8 &&
           cowBottomRef.current <= benchTop + 8;
+
+        obstacle.benchTrapActive = standingOnBench;
+        if (!standingOnBench) {
+          obstacle.trapTriggerTime = undefined;
+          continue;
+        }
+
+        const now = performance.now() / 1000;
+        if (obstacle.trapTriggerTime === undefined) {
+          obstacle.trapTriggerTime = now;
+        }
+        if (now - obstacle.trapTriggerTime >= TRAP_ARM_DELAY) {
+          livesRef.current = 0;
+          setLives(0);
+          triggerGameOver();
+        }
       }
 
       // Nube trampa: al pisarla se resquebraja y desaparece para que la vaquita caiga.
@@ -2384,14 +3519,53 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           let hitSolid: Obstacle | null = null;
 
           for (const obstacle of obstaclesRef.current) {
+            if (
+              obstacle.type === 'chase_monster' &&
+              chasePhaseRef.current !== 'chase'
+            ) {
+              continue;
+            }
+            if (obstacle.type === 'bat' && obstacle.active !== true) {
+              continue;
+            }
+            if (
+              obstacle.type === 'upper_platform' ||
+              obstacle.type === 'boss_gate' ||
+              obstacle.type === 'cloud_trap' ||
+              obstacle.type === 'mud_log' ||
+              obstacle.type === 'mud_trap' ||
+              obstacle.type === 'bat_trigger' ||
+              obstacle.type === 'chase_trigger' ||
+              obstacle.type === 'floor_spines' ||
+              obstacle.type === 'water' ||
+              obstacle.type === 'goal' ||
+              obstacle.type === 'portal'
+            ) {
+              continue;
+            }
+            const usesSpriteHitbox =
+              obstacle.type === 'enemy' ||
+              obstacle.type === 'piranha' ||
+              obstacle.type === 'bat' ||
+              obstacle.type === 'chase_monster';
+            const spriteRect = usesSpriteHitbox
+              ? getBossCollisionBox(obstacle)
+              : obstacle;
             const checkRect =
-              obstacle.type === 'enemy' || obstacle.type === 'piranha'
-                ? getBossCollisionBox(obstacle)
-                : obstacle;
+              obstacle.type === 'bat'
+                ? {
+                    x: obstacle.x - 4,
+                    bottom: obstacle.bottom - BAT_BULLET_TOLERANCE_Y,
+                    width: obstacle.width + 8,
+                    height: obstacle.height + BAT_BULLET_TOLERANCE_Y * 2,
+                  }
+                : spriteRect;
             if (aabbOverlap(bulletRect, checkRect)) {
               if (
                 obstacle.type === 'enemy' ||
                 obstacle.type === 'piranha' ||
+                obstacle.type === 'bat' ||
+                obstacle.type === 'chase_monster' ||
                 obstacle.type === 'destructible' ||
                 obstacle.type === 'moving'
               ) {
@@ -2409,6 +3583,8 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
             const isDestroyable =
               hitObstacle.type === 'enemy' ||
               hitObstacle.type === 'piranha' ||
+              hitObstacle.type === 'bat' ||
+              hitObstacle.type === 'chase_monster' ||
               hitObstacle.type === 'destructible' ||
               hitObstacle.type === 'moving';
 
@@ -2417,6 +3593,9 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
               const currentHealth = hitObstacle.health ?? 1;
               const bulletDamage = weapon.damage ?? 1;
               const newHealth = currentHealth - bulletDamage;
+              if (hitObstacle.type === 'chase_monster') {
+                setBossHp(Math.max(0, newHealth));
+              }
 
               // Registrar tiempo de impacto para efecto visual de destello
               const idx = obstaclesRef.current.findIndex(
@@ -2437,17 +3616,46 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
               if (newHealth <= 0) {
                 hitObstacle.isDead = true;
-                obstaclesRef.current = obstaclesRef.current.filter(
-                  (o) => o.id !== hitObstacle.id
-                );
-                setObstacles([...obstaclesRef.current]);
+                if (hitObstacle.type === 'chase_monster') {
+                  if (idx !== -1) {
+                    obstaclesRef.current[idx].health = 0;
+                  }
+                  setBossHp(0);
+                  chasePhaseRef.current = 'defeated';
+                  setMonsterPhase('defeated');
+                  monsterDefeatAtRef.current = now;
+                  fireballsRef.current = [];
+                  setFireballs([]);
+                  for (const obstacle of obstaclesRef.current) {
+                    if (obstacle.type === 'portal' && obstacle.portalLocked) {
+                      obstacle.portalLocked = false;
+                    }
+                    if (obstacle.type === 'boss_gate') {
+                      obstacle.active = false;
+                    }
+                  }
+                  obstaclesRef.current = obstaclesRef.current.filter(
+                    (o) => o.type !== 'floor_spines' && o.type !== 'spines_barrier'
+                  );
+                  setObstacles([...obstaclesRef.current]);
+                } else {
+                  obstaclesRef.current = obstaclesRef.current.filter(
+                    (o) => o.id !== hitObstacle.id
+                  );
+                  setObstacles([...obstaclesRef.current]);
+                }
 
                 const isBossDefeated = hitObstacle.isBoss || hitObstacle.bossConfig;
-                const coinReward = isBossDefeated ? 25 : COIN_BONUS_PER_KILL;
-                const scoreReward = isBossDefeated ? 15 : 1;
+                const isChaseMonster = hitObstacle.type === 'chase_monster';
+                const coinReward = isBossDefeated
+                  ? 25
+                  : isChaseMonster
+                    ? 30
+                    : COIN_BONUS_PER_KILL;
+                const scoreReward = isBossDefeated ? 15 : isChaseMonster ? 20 : 1;
 
                 // Spawneo de monedas de recompensa (mÃºltiples si es jefe)
-                const coinsToSpawn = isBossDefeated ? 5 : 1;
+                const coinsToSpawn = isBossDefeated || isChaseMonster ? 5 : 1;
                 for (let c = 0; c < coinsToSpawn; c++) {
                   floatingCoinsRef.current.push({
                     id: Date.now() + c,
@@ -2473,8 +3681,8 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           }
 
           if (
-            bullet.x < cameraXRef.current - 80 ||
-            bullet.x + bullet.width > cameraXRef.current + screenWidth + 80 ||
+            bullet.x < cameraXRef.current - 1200 ||
+            bullet.x + bullet.width > cameraXRef.current + screenWidth + 1800 ||
             bulletNowSeconds - bullet.born > weapon.lifetime
           ) {
             continue;
@@ -2504,9 +3712,25 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
 
       // Player vs patrolling enemy collision (AABB).
       // Nota: El daÃ±o al jefe y monstruos ahora se realiza EXCLUSIVAMENTE a distancia mediante disparos (proyectiles/balas).
-      // El contacto fÃ­sico del monstruo con la vaquita sigue provocando Game Over.
+      // El contacto fÃ­sico con la vaquita resta una vida (con invulnerabilidad).
       for (const obstacle of obstaclesRef.current) {
-        if (obstacle.type !== 'enemy' && obstacle.type !== 'piranha') {
+        if (
+          obstacle.type !== 'enemy' &&
+          obstacle.type !== 'piranha' &&
+          obstacle.type !== 'bat' &&
+          obstacle.type !== 'chase_monster'
+        ) {
+          continue;
+        }
+        if (obstacle.type === 'bat' && obstacle.batAwake !== true) {
+          continue;
+        }
+        if (
+          obstacle.type === 'chase_monster' &&
+          (obstacle.isDead ||
+            chasePhaseRef.current !== 'chase' ||
+            time / 1000 < chaseGraceUntilRef.current)
+        ) {
           continue;
         }
 
@@ -2516,19 +3740,64 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
         }
 
         if (intersectsEnemy(cowXRef.current, cowBottomRef.current, obstacle)) {
-          triggerGameOver();
+          takeDamage();
           break;
         }
       }
 
-      // Contacto con trampa con pinchos activada â†’ Game Over
+      for (const obstacle of obstaclesRef.current) {
+        if (obstacle.type !== 'floor_spines') {
+          continue;
+        }
+        if (
+          !isGroundedRef.current ||
+          Math.abs(cowBottomRef.current - GROUND_HEIGHT) > 4
+        ) {
+          continue;
+        }
+        if (!intersectsHazard(cowXRef.current, cowBottomRef.current, obstacle)) {
+          continue;
+        }
+        if (!takeDamage()) {
+          continue;
+        }
+
+        const pushedRight =
+          cowXRef.current + COW_WIDTH / 2 < obstacle.x + obstacle.width / 2;
+        cowXRef.current = Math.max(
+          0,
+          cowXRef.current + (pushedRight ? -16 : 16)
+        );
+        velocityXRef.current = 0;
+        velocityYRef.current = 300;
+        isGroundedRef.current = false;
+        break;
+      }
+
+      for (const obstacle of obstaclesRef.current) {
+        if (obstacle.type !== 'boss_gate' || obstacle.active !== true) {
+          continue;
+        }
+        const gateRect: Rect = {
+          x: obstacle.x - 6,
+          bottom: obstacle.bottom,
+          width: obstacle.width + 12,
+          height: obstacle.height + 12,
+        };
+        if (aabbOverlap(cowRect(cowXRef.current, cowBottomRef.current), gateRect)) {
+          takeDamage();
+          break;
+        }
+      }
+
+      // Contacto con trampa con pinchos activada → resta una vida
       for (const obstacle of obstaclesRef.current) {
         if (obstacle.type !== 'trap_platform' || !obstacle.trapTriggered) {
           continue;
         }
 
         if (intersectsHazard(cowXRef.current, cowBottomRef.current, obstacle)) {
-          triggerGameOver();
+          takeDamage();
           break;
         }
       }
@@ -2537,38 +3806,31 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
       // seguras: el único peligro del lago es el agua.
       for (const obstacle of obstaclesRef.current) {
         const isTrapSpike = obstacle.type === 'spike_trap' && obstacle.spikeTrapVisible;
-        const isActiveBenchTrap = obstacle.type === 'bench_trap' && obstacle.benchTrapActive;
+        const isActiveChaseSpike =
+          obstacle.type === 'chase_spike' && obstacle.spikeTrapVisible;
         if (
           obstacle.type !== 'spike' &&
-          !isActiveBenchTrap &&
-          !isTrapSpike
+          !isTrapSpike &&
+          !isActiveChaseSpike
         ) {
           continue;
         }
 
-        if (isTrapSpike) {
+        if (isTrapSpike || isActiveChaseSpike) {
           const hazard: Obstacle = {
             ...obstacle,
             bottom: obstacle.bottom,
             height: obstacle.height,
           };
           if (intersectsHazard(cowXRef.current, cowBottomRef.current, hazard)) {
-            triggerGameOver();
+            takeDamage();
             break;
           }
           continue;
         }
 
-        // El tronco trampa es sólido: cuando la vaquita se para encima queda
-        // apoyada justo en su borde superior, por lo que el AABB normal no
-        // detecta contacto. Se amplía el área letal un poco hacia arriba para
-        // que la muerda al pisarlo.
-        const hazard: Obstacle = isActiveBenchTrap
-          ? { ...obstacle, height: obstacle.height + 10 }
-          : obstacle;
-
-        if (intersectsHazard(cowXRef.current, cowBottomRef.current, hazard)) {
-          triggerGameOver();
+        if (intersectsHazard(cowXRef.current, cowBottomRef.current, obstacle)) {
+          takeDamage();
           break;
         }
       }
@@ -2742,6 +4004,18 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
         obstacle.trapShakeY = obstacle.trapTriggered ? Math.sin(visualNow * 20) * 10 : 0;
       }
 
+      // Hundimiento de la trampa: la Y de la vaquita sigue la misma línea
+      // lineal que el tronco (sincronizados con la animación del componente).
+      if (mudSinkRef.current !== null) {
+        const sink = mudSinkRef.current;
+        const sinkProgress = Math.min(
+          1,
+          (time - sink.startedAt) / MUD_TRAP_SINK_DURATION
+        );
+        cowBottomRef.current =
+          sink.startBottom - sinkProgress * sink.sinkDistance;
+      }
+
       updateView();
 
       frameId = requestAnimationFrame(loop);
@@ -2829,7 +4103,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, [updateHorizontalVelocity]);
 
   const handleJumpPressIn = useCallback(() => {
-    if (gameOverRef.current || portalAbsorbRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current || mudSinkRef.current !== null) {
       return;
     }
 
@@ -2845,7 +4119,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, [requestStart]);
 
   const shoot = useCallback(() => {
-    if (gameOverRef.current || portalAbsorbRef.current) {
+    if (gameOverRef.current || portalAbsorbRef.current || mudSinkRef.current !== null) {
       return;
     }
 
@@ -2994,6 +4268,11 @@ let muzzleX: number;
   }, [handleLeftPressIn, handleLeftPressOut, handleRightPressIn, handleRightPressOut, handleJumpPressIn, handleShootPressIn]);
 
   const restart = useCallback(() => {
+    carriedProgress = {
+      coins: coinsRefCount.current,
+      ownedWeapons: [...ownedWeaponsRef.current],
+      weapon: weaponRef.current,
+    };
     const levelId = levelRef.current;
     const initialObstacles = createInitialObstacles(levelId);
     const initialTerrain = createInitialTerrain();
@@ -3014,6 +4293,9 @@ let muzzleX: number;
     obstaclesRef.current = initialObstacles;
     terrainRef.current = initialTerrain;
     bulletsRef.current = [];
+    fireballsRef.current = [];
+    setFireballs([]);
+    nextFireballShotAtRef.current = 0;
     floatingCoinsRef.current = [];
     coinsRefState.current = initialCoins;
     coinsRef.current = [];
@@ -3021,21 +4303,34 @@ let muzzleX: number;
     bulletIdRef.current = 0;
     lastShotRef.current = 0;
     scoreRef.current = 0;
-    coinsRefCount.current = 0;
-    weaponRef.current = 0;
-    const baseOwned = WEAPONS.map((_, i) => i === 0);
-    ownedWeaponsRef.current = baseOwned;
     shopOpenRef.current = false;
+    shopSlide.setValue(0);
     nextObstacleXRef.current = INITIAL_NEXT_OBSTACLE_X;
     obstacleIdRef.current = initialObstacles.length;
     gameOverRef.current = false;
+    livesRef.current = MAX_LIVES;
+    invulnerableUntilRef.current = 0;
 
     setGameOver(false);
+    setLives(MAX_LIVES);
+    setInvulnerableUntil(0);
     setCowDead(false);
     levelCompletedRef.current = false;
     setLevelCompleted(false);
     portalAbsorbRef.current = false;
     setPortalAbsorb(null);
+    mudSinkCompleteRef.current = false;
+    mudSinkRef.current = null;
+    chaseStartedRef.current = false;
+    monsterSpawnedRef.current = false;
+    chasePhaseRef.current = 'idle';
+    chaseDropUntilRef.current = 0;
+    chaseGraceUntilRef.current = 0;
+    wave2BatNextSpawnAtRef.current = 0;
+    monsterDefeatAtRef.current = 0;
+    setMonsterPhase('idle');
+    setBossHp(0);
+    bossHpAnim.setValue(0);
     setObstacles(initialObstacles);
     setTerrain(initialTerrain);
     setBullets([]);
@@ -3053,18 +4348,27 @@ let muzzleX: number;
     });
     setFacing('right');
     setScore(0);
-    setCoins(0);
-    setCurrentWeapon(0);
-    setOwnedWeapons(baseOwned);
+    setCoins(coinsRefCount.current);
+    setCurrentWeapon(weaponRef.current);
+    setOwnedWeapons([...ownedWeaponsRef.current]);
     setShopOpen(false);
 
     requestStart();
-  }, [requestStart]);
+  }, [requestStart, shopSlide, bossHpAnim]);
 
   const advanceLevel = useCallback(() => {
     const nextLevelId = Math.min(LEVELS.length, levelRef.current + 1);
     levelRef.current = nextLevelId;
     setCurrentLevel(nextLevelId);
+
+    carriedProgress = {
+      coins: coinsRefCount.current,
+      ownedWeapons: [...ownedWeaponsRef.current],
+      weapon: weaponRef.current,
+    };
+    const carriedCoins = carriedProgress.coins;
+    const carriedOwnedWeapons = [...carriedProgress.ownedWeapons];
+    const carriedWeapon = carriedProgress.weapon;
 
     const initialObstacles = createInitialObstacles(nextLevelId);
     const initialTerrain = createInitialTerrain();
@@ -3085,6 +4389,9 @@ let muzzleX: number;
     obstaclesRef.current = initialObstacles;
     terrainRef.current = initialTerrain;
     bulletsRef.current = [];
+    fireballsRef.current = [];
+    setFireballs([]);
+    nextFireballShotAtRef.current = 0;
     floatingCoinsRef.current = [];
     coinsRefState.current = initialCoins;
     coinsRef.current = [];
@@ -3095,13 +4402,29 @@ let muzzleX: number;
     nextObstacleXRef.current = INITIAL_NEXT_OBSTACLE_X;
     obstacleIdRef.current = initialObstacles.length;
     gameOverRef.current = false;
+    livesRef.current = MAX_LIVES;
+    invulnerableUntilRef.current = 0;
 
     setGameOver(false);
+    setLives(MAX_LIVES);
+    setInvulnerableUntil(0);
     setCowDead(false);
     levelCompletedRef.current = false;
     setLevelCompleted(false);
     portalAbsorbRef.current = false;
     setPortalAbsorb(null);
+    mudSinkCompleteRef.current = false;
+    mudSinkRef.current = null;
+    chaseStartedRef.current = false;
+    monsterSpawnedRef.current = false;
+    chasePhaseRef.current = 'idle';
+    chaseDropUntilRef.current = 0;
+    chaseGraceUntilRef.current = 0;
+    wave2BatNextSpawnAtRef.current = 0;
+    monsterDefeatAtRef.current = 0;
+    setMonsterPhase('idle');
+    setBossHp(0);
+    bossHpAnim.setValue(0);
     setObstacles(initialObstacles);
     setTerrain(initialTerrain);
     setBullets([]);
@@ -3121,8 +4444,15 @@ let muzzleX: number;
     setScore(0);
     setShopOpen(false);
 
+    coinsRefCount.current = carriedCoins;
+    ownedWeaponsRef.current = carriedOwnedWeapons;
+    weaponRef.current = carriedWeapon;
+    setCoins(carriedCoins);
+    setOwnedWeapons(carriedOwnedWeapons);
+    setCurrentWeapon(carriedWeapon);
+
     requestStart();
-  }, [requestStart]);
+  }, [requestStart, bossHpAnim]);
 
 
   // Portal: cuando absorbe a la vaquita, espera la animación y pasa al nivel 2.
@@ -3143,15 +4473,21 @@ let muzzleX: number;
   // El agua se dibuja primero para que las nubes (y el resto de obstáculos)
   // queden por encima del lago.
   const visibleObstacles = obstacles
-    .filter(
-      (obs) =>
-        !isVanishedObstacle(obs) &&
+      .filter(
+        (obs) =>
+          !isVanishedObstacle(obs) &&
+          !obs.portalLocked &&
         obs.x + obs.width > view.cameraX &&
         obs.x < view.cameraX + screenWidth
     )
     .sort((a, b) => (a.type === 'water' ? 0 : 1) - (b.type === 'water' ? 0 : 1));
   const visibleBullets = bullets.filter(
     (b) => b.x + 5 > view.cameraX && b.x - 5 < view.cameraX + screenWidth
+  );
+  const visibleFireballs = fireballs.filter(
+    (f) =>
+      f.x + FIREBALL_RADIUS > view.cameraX &&
+      f.x - FIREBALL_RADIUS < view.cameraX + screenWidth
   );
   const visibleCoins = levelCoins.filter(
     (c) => !c.collected && c.x + c.width > view.cameraX && c.x < view.cameraX + screenWidth
@@ -3273,6 +4609,9 @@ let muzzleX: number;
     : COW_HEIGHT * 0.72;
 
   const shopPanelWidth = Math.min(320, screenWidth * 0.86);
+  const isInvulnerable = view.now * 1000 < invulnerableUntil;
+  const cowBlinkOpacity =
+    isInvulnerable && Math.floor(view.now * 12) % 2 === 0 ? 0.25 : 1;
 
   return (
     <View style={styles.container}>
@@ -3283,6 +4622,42 @@ let muzzleX: number;
           NIVEL {currentLevel}{' '}
           {levelCompleted ? '🟢 COMPLETADO' : ''}
         </Text>
+      )}
+
+      <View style={styles.livesHud} pointerEvents="none">
+        {Array.from({ length: MAX_LIVES }, (_, index) => (
+          <Text
+            key={index}
+            style={[
+              styles.lifeHeart,
+              index < lives ? styles.lifeHeartFull : styles.lifeHeartEmpty,
+            ]}
+          >
+            {index < lives ? '♥' : '♡'}
+          </Text>
+        ))}
+      </View>
+
+      {bossHp > 0 && (
+        <View style={styles.bossHpContainer} pointerEvents="none">
+          <Text style={styles.bossHpLabel}>JEFE FINAL</Text>
+          <View style={styles.bossHpTrack}>
+            <Animated.View
+              style={[
+                styles.bossHpFill,
+                {
+                  width: bossHpAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.bossHpValue}>
+            {bossHp}/{BOSS_MAX_HP}
+          </Text>
+        </View>
       )}
 
       {/* El suelo se dibuja antes que el agua y los obstáculos para que el
@@ -3323,7 +4698,14 @@ let muzzleX: number;
           case 'stone_trap':
             return <StoneTrapObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'bench_trap':
-            return <BenchTrapObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
+            return (
+              <BenchTrapObstacle
+                key={obstacle.id}
+                obstacle={obstacle}
+                left={left}
+                active={obstacle.benchTrapActive === true}
+              />
+            );
           case 'cloud_trap':
             return (
               <CloudTrap
@@ -3348,6 +4730,58 @@ let muzzleX: number;
             return <MovingObstacle key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'trap_platform':
             return <TrapPlatform key={obstacle.id} obstacle={obstacle} left={left} />;
+          case 'upper_platform':
+            return (
+              <UpperRoutePlatform key={obstacle.id} obstacle={obstacle} left={left} />
+            );
+          case 'floor_spines':
+            return (
+              <FloorSpines key={obstacle.id} obstacle={obstacle} left={left} />
+            );
+          case 'spines_barrier':
+            return null;
+          case 'boss_gate':
+            return <BossGate key={obstacle.id} obstacle={obstacle} left={left} />;
+          case 'chase_trigger':
+            return null;
+          case 'chase_monster':
+            return (
+              <ChaseMonster
+                key={obstacle.id}
+                left={left}
+                bottom={obstacle.bottom}
+                facing={obstacle.facing ?? 'left'}
+                phase={monsterPhase === 'idle' ? 'chase' : monsterPhase}
+                hitFlash={
+                  obstacle.lastHitTime !== undefined &&
+                  view.now - obstacle.lastHitTime < 0.2
+                }
+                style={{ zIndex: 5 }}
+              />
+            );
+          case 'chase_spike':
+            return (
+              <ChaseSpike
+                key={obstacle.id}
+                obstacle={obstacle}
+                left={left}
+                now={view.now}
+              />
+            );
+          case 'bat_trigger':
+            return null;
+          case 'bat':
+            if (obstacle.active !== true) {
+              return null;
+            }
+            return (
+              <BatObstacle
+                key={obstacle.id}
+                obstacle={obstacle}
+                left={left}
+                now={view.now}
+              />
+            );
           case 'water':
             return <WaterZone key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'piranha':
@@ -3383,6 +4817,24 @@ let muzzleX: number;
         >
           <View style={styles.bulletCore} />
           <View style={styles.bulletTrail} />
+        </View>
+      ))}
+
+      {visibleFireballs.map((fireball) => (
+        <View
+          key={fireball.id}
+          pointerEvents="none"
+          style={[
+            styles.fireball,
+            {
+              left: Number(fireball.x - view.cameraX - FIREBALL_VISUAL_WIDTH / 2),
+              bottom: Number(fireball.y - FIREBALL_VISUAL_HEIGHT / 2),
+              transform: [{ scaleX: fireball.vx < 0 ? -1 : 1 }],
+            },
+          ]}
+        >
+          <View style={styles.fireballTail} />
+          <View style={styles.fireballCore} />
         </View>
       ))}
 
@@ -3468,10 +4920,25 @@ let muzzleX: number;
           {
             left: Number(cowRenderLeft),
             bottom: Number(cowRenderBottom),
-            opacity: 1 - absorbEase,
+            opacity: (1 - absorbEase) * cowBlinkOpacity,
           },
         ]}
       />
+
+      {/* El lodo se pinta después de la vaquita para que la tape al hundirse. */}
+      {visibleObstacles
+        .filter((obstacle) => obstacle.type === 'mud_trap')
+        .map((obstacle) => (
+          <MudTrapZone
+            key={obstacle.id}
+            width={obstacle.width}
+            left={Number(obstacle.x - view.cameraX)}
+            bottom={obstacle.bottom}
+            height={obstacle.height}
+            isTriggered={obstacle.mudTriggered === true}
+            onSinkComplete={handleMudSinkComplete}
+          />
+        ))}
 
       <CurrentScore score={score} />
 
@@ -3798,6 +5265,36 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
+  chaseSpikeBase: {
+    position: 'absolute',
+    left: -4,
+    right: -4,
+    bottom: 0,
+    height: 14,
+    borderRadius: 6,
+    backgroundColor: '#2b2530',
+    borderTopWidth: 3,
+    borderTopColor: '#4d4554',
+  },
+  chaseSpikeSprite: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 8,
+    height: CHASE_SPIKE_HEIGHT - 8,
+    width: '100%',
+  },
+  chaseSpikeWarning: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    top: 2,
+    bottom: 2,
+    borderRadius: 10,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 108, 64, 0.95)',
+    backgroundColor: 'rgba(255, 80, 40, 0.22)',
+  },
   stonePlatform: {
     borderRadius: 12,
     borderWidth: 3,
@@ -4066,7 +5563,7 @@ const styles = StyleSheet.create({
   },
   grass: {
     position: 'absolute',
-    top: 0,
+    top: -4,
     left: 0,
     right: 0,
     height: 26,
@@ -4102,6 +5599,41 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 8,
     elevation: 8,
+  },
+  fireball: {
+    position: 'absolute',
+    width: FIREBALL_VISUAL_WIDTH,
+    height: FIREBALL_VISUAL_HEIGHT,
+    borderRadius: FIREBALL_VISUAL_HEIGHT / 2,
+    backgroundColor: 'rgba(255, 96, 24, 0.92)',
+    borderWidth: 2,
+    borderColor: '#ffcf5c',
+    shadowColor: '#ff4a12',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 12,
+    zIndex: 6,
+  },
+  fireballCore: {
+    position: 'absolute',
+    left: FIREBALL_VISUAL_WIDTH * 0.42,
+    top: 3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#fff1a8',
+    borderWidth: 2,
+    borderColor: '#ff8a2b',
+  },
+  fireballTail: {
+    position: 'absolute',
+    left: -16,
+    top: 4,
+    width: 26,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(255, 62, 12, 0.7)',
   },
   bulletCore: {
     position: 'absolute',
@@ -4196,6 +5728,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 10,
+    zIndex: 100,
   },
   hudWeapon: {
     flexDirection: 'column',
@@ -4307,8 +5840,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 40,
-    elevation: 40,
+    zIndex: 120,
+    elevation: 120,
   },
   shopBackdrop: {
     position: 'absolute',
@@ -4494,7 +6027,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     top: 10,
-    zIndex: 25,
+    zIndex: 100,
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
@@ -4505,6 +6038,73 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+  },
+  livesHud: {
+    position: 'absolute',
+    left: 10,
+    top: 40,
+    zIndex: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  lifeHeart: {
+    fontSize: 20,
+    lineHeight: 24,
+    marginRight: 3,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  lifeHeartFull: {
+    color: '#ff4d6d',
+  },
+  lifeHeartEmpty: {
+    color: 'rgba(255,255,255,0.45)',
+  },
+  bossHpContainer: {
+    position: 'absolute',
+    top: 104,
+    left: 10,
+    right: 10,
+    zIndex: 100,
+    alignItems: 'center',
+  },
+  bossHpLabel: {
+    color: '#ffd166',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  bossHpTrack: {
+    marginTop: 4,
+    width: '100%',
+    maxWidth: 320,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    overflow: 'hidden',
+  },
+  bossHpFill: {
+    height: '100%',
+    backgroundColor: '#ff3b30',
+  },
+  bossHpValue: {
+    marginTop: 2,
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   trapPlatformBase: {
     backgroundColor: '#8d6e63',
