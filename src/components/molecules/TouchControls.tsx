@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   rightGroup: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 14,

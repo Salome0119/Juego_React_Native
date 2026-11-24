@@ -51,7 +51,7 @@ export const BatEnemy = React.memo(function BatEnemy({
       ]}
     >
       <Image
-        source={require('../../../assets/murcielago1.png')}
+        source={require('../../../assets/monstruos/murcielago1.png')}
         style={[
           styles.image,
           spriteStyle,
@@ -62,7 +62,7 @@ export const BatEnemy = React.memo(function BatEnemy({
         accessible={false}
       />
       <Image
-        source={require('../../../assets/murcielago2.png')}
+        source={require('../../../assets/monstruos/murcielago2.png')}
         style={[
           styles.image,
           spriteStyle,

@@ -12,12 +12,13 @@ import { SCREEN_HEIGHT } from '../../constants/theme';
 export const CHASE_MONSTER_WIDTH = 260;
 export const CHASE_MONSTER_HEIGHT = 240;
 export const CHASE_MONSTER_FRAME_MS = 180;
+const CHASE_MONSTER_REFERENCE_SPEED = 150;
 
 const SPRITES = [
-  require('../../../assets/mosntruo1level2.png'),
-  require('../../../assets/mosntruo2level2.png'),
-  require('../../../assets/mosntruo3level2.png'),
-  require('../../../assets/mosntruo4level2.png'),
+  require('../../../assets/monstruos/mosntruo1level2.png'),
+  require('../../../assets/monstruos/mosntruo2level2.png'),
+  require('../../../assets/monstruos/mosntruo3level2.png'),
+  require('../../../assets/monstruos/mosntruo4level2.png'),
 ];
 
 export type ChaseMonsterPhase = 'drop' | 'chase' | 'defeated';
@@ -28,6 +29,9 @@ interface ChaseMonsterProps {
   facing: 'left' | 'right';
   phase: ChaseMonsterPhase;
   hitFlash: boolean;
+  moving: boolean;
+  firing: boolean;
+  moveSpeed: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -62,9 +66,14 @@ export const ChaseMonster = React.memo(function ChaseMonster({
   facing,
   phase,
   hitFlash,
+  moving,
+  firing,
+  moveSpeed,
   style,
 }: ChaseMonsterProps) {
   const frame = useSharedValue(0);
+  const breath = useSharedValue(0);
+  const facingScale = useSharedValue(facing === 'left' ? -1 : 1);
   const visualX = useSharedValue(left);
   const visualBottom = useSharedValue(
     phase === 'drop' ? SCREEN_HEIGHT + 220 : bottom
@@ -74,14 +83,23 @@ export const ChaseMonster = React.memo(function ChaseMonster({
   const dropStarted = useRef(false);
 
   useEffect(() => {
-    if (phase === 'defeated') {
+    if (phase !== 'chase' || !moving || firing) {
       cancelAnimation(frame);
+      frame.value = withTiming(0, { duration: 120, easing: Easing.linear });
       return;
     }
 
+    const frameMs = Math.max(
+      90,
+      Math.min(
+        240,
+        (CHASE_MONSTER_FRAME_MS * CHASE_MONSTER_REFERENCE_SPEED) /
+          Math.max(moveSpeed, 1)
+      )
+    );
     frame.value = withRepeat(
       withTiming(SPRITES.length - 1, {
-        duration: CHASE_MONSTER_FRAME_MS * (SPRITES.length - 1),
+        duration: frameMs * (SPRITES.length - 1),
         easing: Easing.linear,
       }),
       -1,
@@ -91,7 +109,24 @@ export const ChaseMonster = React.memo(function ChaseMonster({
     return () => {
       cancelAnimation(frame);
     };
-  }, [frame, phase]);
+  }, [frame, phase, moving, firing, moveSpeed]);
+
+  useEffect(() => {
+    if (phase === 'defeated') {
+      cancelAnimation(breath);
+      return;
+    }
+
+    breath.value = withRepeat(
+      withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    );
+
+    return () => {
+      cancelAnimation(breath);
+    };
+  }, [breath, phase]);
 
   useEffect(() => {
     if (phase === 'drop' && !dropStarted.current) {
@@ -120,6 +155,13 @@ export const ChaseMonster = React.memo(function ChaseMonster({
   }, [left, phase, visualX]);
 
   useEffect(() => {
+    facingScale.value = withTiming(facing === 'left' ? -1 : 1, {
+      duration: 120,
+      easing: Easing.linear,
+    });
+  }, [facing, facingScale]);
+
+  useEffect(() => {
     if (!hitFlash) {
       return;
     }
@@ -137,13 +179,13 @@ export const ChaseMonster = React.memo(function ChaseMonster({
     () => ({
       transform: [
         { translateX: visualX.value },
-        { translateY: -visualBottom.value },
-        { scaleX: facing === 'left' ? -1 : 1 },
-        { scale: 1 - defeated.value * 0.45 },
+        { translateY: -visualBottom.value - breath.value * 3 },
+        { scaleX: facingScale.value },
+        { scale: (1 - defeated.value * 0.45) * (1 + breath.value * 0.015) },
       ],
       opacity: 1 - defeated.value,
     }),
-    [facing]
+    []
   );
 
   const flashStyle = useAnimatedStyle(

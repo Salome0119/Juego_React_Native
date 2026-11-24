@@ -9,10 +9,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-const IMG_MUD_TRANSFORM = require('../../../assets/arena1.png');
-const IMG_MUD_EDGE = require('../../../assets/arena2.png');
-const IMG_MUD_CENTER = require('../../../assets/arena3.png');
-const IMG_LOG = require('../../../assets/arena4.png');
+const IMG_MUD_TRANSFORM = require('../../../assets/trampas/arena1.png');
+const IMG_MUD_EDGE = require('../../../assets/trampas/arena2.png');
+const IMG_MUD_CENTER = require('../../../assets/trampas/arena3.png');
+const IMG_LOG = require('../../../assets/trampas/arena4.png');
 
 const TRANSFORM_TEXTURE = { width: 574, height: 180, topRow: 48 };
 const EDGE_TEXTURE = { width: 289, height: 317, surfaceRow: 193 };
