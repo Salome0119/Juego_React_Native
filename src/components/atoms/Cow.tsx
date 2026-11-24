@@ -37,7 +37,7 @@ export const Cow: React.FC<CowProps> = ({
   isMoving = false,
   isJumping = false,
   rotation = 0,
-  spriteSource = require('../../../assets/caminando1.png'),
+  spriteSource = require('../../../assets/vaquita/caminando1.png'),
   resizeMode = 'contain',
   weapon = null,
   style,

@@ -49,7 +49,7 @@ export const Enemy = React.memo(function Enemy({
       ]}
     >
       <Image
-        source={imageSource ?? require('../../../assets/monster-green.png')}
+        source={imageSource ?? require('../../../assets/monstruos/monster-green.png')}
         style={[
           styles.image,
           {
