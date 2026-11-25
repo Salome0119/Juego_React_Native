@@ -9,6 +9,10 @@ interface TouchControlsProps {
   onRightPressIn: () => void;
   onRightPressOut: () => void;
   onJumpPressIn: () => void;
+  onJumpPressOut?: () => void;
+  onDownPressIn?: () => void;
+  onDownPressOut?: () => void;
+  showDown?: boolean;
   onShootPressIn: () => void;
 }
 
@@ -19,6 +23,10 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   onRightPressIn,
   onRightPressOut,
   onJumpPressIn,
+  onJumpPressOut,
+  onDownPressIn,
+  onDownPressOut,
+  showDown = false,
   onShootPressIn,
 }) => {
   return (
@@ -38,6 +46,15 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
         >
           <Text style={styles.arrow}>{'>'}</Text>
         </Pressable>
+        {showDown && (
+          <Pressable
+            onPressIn={onDownPressIn}
+            onPressOut={onDownPressOut}
+            style={({ pressed }) => [styles.circleButton, styles.downButton, pressed && styles.buttonPressed]}
+          >
+            <Text style={styles.arrow}>{'↓'}</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.rightGroup}>
@@ -49,6 +66,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
         </Pressable>
         <Pressable
           onPressIn={onJumpPressIn}
+          onPressOut={onJumpPressOut}
           style={({ pressed }) => [styles.circleButton, styles.jumpButton, pressed && styles.buttonPressed]}
         >
           <Text style={styles.jumpArrow}>{'↑'}</Text>
@@ -95,6 +113,18 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.85)',
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
     shadowColor: '#8fe9ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  downButton: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderColor: 'rgba(160, 240, 255, 0.95)',
+    backgroundColor: 'rgba(40, 150, 190, 0.35)',
+    shadowColor: '#7fe8ff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.85,
     shadowRadius: 12,
