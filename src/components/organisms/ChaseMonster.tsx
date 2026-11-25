@@ -11,8 +11,8 @@ import { SCREEN_HEIGHT } from '../../constants/theme';
 
 export const CHASE_MONSTER_WIDTH = 260;
 export const CHASE_MONSTER_HEIGHT = 240;
-export const CHASE_MONSTER_FRAME_MS = 180;
-const CHASE_MONSTER_REFERENCE_SPEED = 150;
+const CHASE_MONSTER_STRIDE_PX = 32;
+const CHASE_STEP_BOUNCE_PX = 3;
 
 const SPRITES = [
   require('../../../assets/monstruos/mosntruo1level2.png'),
@@ -71,7 +71,8 @@ export const ChaseMonster = React.memo(function ChaseMonster({
   moveSpeed,
   style,
 }: ChaseMonsterProps) {
-  const frame = useSharedValue(0);
+  const frame = useSharedValue(1);
+  const step = useSharedValue(0);
   const breath = useSharedValue(0);
   const facingScale = useSharedValue(facing === 'left' ? -1 : 1);
   const visualX = useSharedValue(left);
@@ -85,16 +86,17 @@ export const ChaseMonster = React.memo(function ChaseMonster({
   useEffect(() => {
     if (phase !== 'chase' || !moving || firing) {
       cancelAnimation(frame);
-      frame.value = withTiming(0, { duration: 120, easing: Easing.linear });
+      cancelAnimation(step);
+      frame.value = withTiming(1, { duration: 120, easing: Easing.linear });
+      step.value = 0;
       return;
     }
 
     const frameMs = Math.max(
-      90,
+      80,
       Math.min(
-        240,
-        (CHASE_MONSTER_FRAME_MS * CHASE_MONSTER_REFERENCE_SPEED) /
-          Math.max(moveSpeed, 1)
+        260,
+        (CHASE_MONSTER_STRIDE_PX * 1000) / Math.max(moveSpeed, 1)
       )
     );
     frame.value = withRepeat(
@@ -105,11 +107,17 @@ export const ChaseMonster = React.memo(function ChaseMonster({
       -1,
       false
     );
+    step.value = withRepeat(
+      withTiming(1, { duration: frameMs, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    );
 
     return () => {
       cancelAnimation(frame);
+      cancelAnimation(step);
     };
-  }, [frame, phase, moving, firing, moveSpeed]);
+  }, [frame, step, phase, moving, firing, moveSpeed]);
 
   useEffect(() => {
     if (phase === 'defeated') {
@@ -177,9 +185,15 @@ export const ChaseMonster = React.memo(function ChaseMonster({
 
   const rootStyle = useAnimatedStyle(
     () => ({
+      anchorPoint: { x: 0.5, y: 1 },
       transform: [
         { translateX: visualX.value },
-        { translateY: -visualBottom.value - breath.value * 3 },
+        {
+          translateY:
+            -visualBottom.value -
+            breath.value * 3 -
+            Math.abs(Math.sin(step.value * Math.PI)) * CHASE_STEP_BOUNCE_PX,
+        },
         { scaleX: facingScale.value },
         { scale: (1 - defeated.value * 0.45) * (1 + breath.value * 0.015) },
       ],

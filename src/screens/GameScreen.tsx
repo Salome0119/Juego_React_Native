@@ -23,7 +23,15 @@ import {
   ChaseMonsterPhase,
 } from '../components/organisms/ChaseMonster';
 import { COW_HEIGHT, COW_WIDTH, Cow } from '../components/atoms/Cow';
-import { Enemy, BOSS_ASPECT_RATIO, ENEMY_ASPECT_RATIO, PIRANHA_ASPECT_RATIO, getEnemySpriteSize } from '../components/atoms/Enemy';
+import { MermaidCow } from '../components/atoms/MermaidCow';
+import {
+  BossEnemySprite,
+  Enemy,
+  BOSS_ASPECT_RATIO,
+  ENEMY_ASPECT_RATIO,
+  PIRANHA_ASPECT_RATIO,
+  getEnemySpriteSize,
+} from '../components/atoms/Enemy';
 import { CurrentScore } from '../components/molecules/CurrentScore';
 import { TouchControls } from '../components/molecules/TouchControls';
 import { GameOverModal } from '../components/organisms/GameOverModal';
@@ -111,7 +119,9 @@ const BAT_BULLET_TOLERANCE_Y = 18;
 const CHASE_TRIGGER_X = UPPER_ROUTE_START_X + 1050;
 const CHASE_TRIGGER_WIDTH = 1600;
 const CHASE_TRIGGER_HEIGHT = UPPER_ROUTE_TOP - GROUND_HEIGHT;
-const CHASE_SPEED = 150;
+const CHASE_SPEED = 105;
+const CHASE_RUSH_SPEED_MULTIPLIER = 2.1;
+const CHASE_RUSH_DURATION_SECONDS = 0.9;
 const MONSTER_SPIKE_JUMP_SPEED = 520;
 const MONSTER_SPIKE_JUMP_RANGE = 130;
 const MONSTER_AIR_SPEED_MULTIPLIER = 1.35;
@@ -140,6 +150,8 @@ const FIREBALL_SPAWN_OFFSET_Y = 90;
 const FIREBALL_MAX_VERTICAL_GAP = 220;
 const CHASE_SECTION_START = UPPER_ROUTE_START_X + 1500;
 const CHASE_PORTAL_X = CHASE_SECTION_START + 1250;
+const CHASE_ARENA_PLATFORM_WIDTH = 150;
+const LAST_CHASE_PLATFORM_X = CHASE_SECTION_START + 2020;
 
 const MOVE_SPEED = 265;
 const AIR_MOVE_SPEED = 305;
@@ -149,6 +161,27 @@ const MAX_FALL_SPEED = 950;
 const APEX_VELOCITY_THRESHOLD = 100;
 const APEX_GRAVITY_FACTOR = 0.85;
 const MAX_JUMPS = 2;
+const UNDERWATER_START_BOTTOM = GROUND_HEIGHT + 350;
+const UNDERWATER_MIN_BOTTOM = GROUND_HEIGHT + 24;
+const UNDERWATER_MAX_BOTTOM = SCREEN_HEIGHT - 140;
+const UNDERWATER_VERTICAL_SPEED = 230;
+const URCHIN_WARNING_SECONDS = 2;
+const URCHIN_WAVE_SECONDS = 3;
+const URCHIN_FALL_SPEED = 950;
+const URCHIN_SPAWN_INTERVAL = 0.14;
+const URCHIN_FRAME_SECONDS = 0.12;
+const URCHIN_VISIBLE_SIZE = 40;
+const URCHIN_IMAGE_WIDTH = 1376;
+const URCHIN_IMAGE_HEIGHT = 768;
+const URCHIN_LIFETIME_SECONDS = 3;
+const OCTO_COLUMN_WIDTH = 250;
+const OCTO_GAP_CENTER = UNDERWATER_START_BOTTOM;
+const OCTO_GAP_HEIGHT = 140;
+const OCTO_PIECE_HEIGHT = 240;
+const OCTO_ANIM_SECONDS = 0.5;
+const OCTO_ATTACK_SECONDS = 0.7;
+const OCTO_BALL_SPEED = 420;
+const OCTO_BALL_SIZE = 26;
 const MAX_LIVES = 3;
 const INVULNERABILITY_MS = 1300;
 const DAMAGE_FRAME_GUARD_MS = 16;
@@ -169,6 +202,8 @@ const ENEMY_WIDTH = 78;
 const ENEMY_HEIGHT = 78;
 const BOSS_WIDTH = 135;
 const BOSS_HEIGHT = 135;
+const BOSS_ARENA_START_X = 2400;
+const BOSS_ARENA_RANGE = 700;
 const ENEMY_SPEED = 62;
 const ENEMY_HP = 3;
 const ENEMY_JUMP_SPEED = 780;
@@ -195,6 +230,7 @@ const MOVING_MAX_SPEED = 80;
 const MOVING_RANGE_MIN = 150;
 const MOVING_RANGE_MAX = 250;
 const BULLET_RADIUS = 4;
+const BULLET_MAX_RANGE = 620;
 
 // Monedas
 const COIN_WIDTH = 20;
@@ -203,6 +239,28 @@ const COIN_COLLECT_RADIUS = 22;
 
 // Agua / fosas
 const WATER_HEIGHT = 90;
+const LAKE_WATER_X = 3200;
+const LAKE_WATER_WIDTH = 600;
+const LAKE_ROCK_WIDTH = 150;
+const LAKE_ROCK_HEIGHT = 83;
+const LAKE_ROCK_EDGE_OVERLAP = 30;
+const LAKE_ROCK_LEFT_X = LAKE_WATER_X - LAKE_ROCK_WIDTH + LAKE_ROCK_EDGE_OVERLAP;
+const LAKE_ROCK_RIGHT_X = LAKE_WATER_X + LAKE_WATER_WIDTH - LAKE_ROCK_EDGE_OVERLAP;
+const LAKE_HITBOX_X = LAKE_ROCK_LEFT_X + LAKE_ROCK_WIDTH;
+const LAKE_HITBOX_WIDTH = LAKE_ROCK_RIGHT_X - LAKE_HITBOX_X;
+const LAKE_IMAGE_WIDTH = LAKE_WATER_WIDTH;
+const LAKE_IMAGE_LEFT_OFFSET = LAKE_WATER_X - LAKE_HITBOX_X;
+const LAKE_CANVAS_WIDTH = 1376;
+const LAKE_CANVAS_HEIGHT = 768;
+const LAKE_IMAGE_ASPECT = LAKE_CANVAS_WIDTH / LAKE_CANVAS_HEIGHT;
+const LAKE_IMAGE_HEIGHT = LAKE_IMAGE_WIDTH / LAKE_IMAGE_ASPECT;
+const LAKE_SURFACE_Y = GROUND_HEIGHT - 20;
+const LEVEL1_GOAL_X = LAKE_WATER_X + LAKE_WATER_WIDTH + 500;
+const LEVEL1_PORTAL_X = LEVEL1_GOAL_X + 120;
+const LEVEL1_WIDTH = LEVEL1_PORTAL_X + 480;
+const LAKE_SURFACE_RATIO = (768 - 390) / 768;
+const LAKE_IMAGE_BOTTOM = LAKE_SURFACE_Y - LAKE_SURFACE_RATIO * LAKE_IMAGE_HEIGHT;
+const LAKE_FRAME_SECONDS = 0.5;
 
 // Trampa de lodo
 const MUD_TRAP_SAFE_MARGIN = 30;
@@ -213,7 +271,8 @@ const TRAP_ARM_DELAY = 0.3; // segundos antes de activar pinchos
 // Nube trampa: plataforma flotante que se resquebraja al pisarla y desaparece
 const CLOUD_TRAP_HEIGHT = 40;
 const CLOUD_TRAP_ASPECT_RATIO = 669 / 373; // proporción real de nubes.png
-const CLOUD_TRAP_CRACK_DELAY = 0.5; // segundos resquebrajada antes de desaparecer
+const CLOUD_TRAP_CRACK_DELAY = 0.2; // segundos resquebrajada antes de desaparecer
+const LAKE_CLOUD_BOTTOM = GROUND_HEIGHT + 120;
 
 // Planta PiraÃ±a
 // Planta Piraña: sube cuando la vaquita salte sobre ella.
@@ -223,6 +282,9 @@ const PIRANHA_HEIGHT = 64;
 const PORTAL_WIDTH = 140;
 const PORTAL_HEIGHT = 140;
 const PORTAL_ANIM_SPEED = 1.1; // velocidad del fundido entre sprites (rad/s)
+const PORTAL_NIVEL2_FRAME_SECONDS = 0.6; // duración de cada sprite del portal del nivel 2
+const PORTAL_NIVEL2_PULSE_SPEED = 0.5; // respiración lenta del portal del nivel 2
+const PORTAL_NIVEL2_ROTATION_SPEED = 4; // grados por segundo del giro del portal del nivel 2
 const PORTAL_ROTATION_SPEED = 14; // grados por segundo del giro del portal
 const PORTAL_CLEAR_ZONE = 320; // zona sin obstáculos antes/después del portal
 const PORTAL_ABSORB_DURATION = 0.9; // segundos que tarda la vaquita en ser absorbida
@@ -251,14 +313,32 @@ const IMG_BENCH_TRAP = require('../../assets/obstaculos/obstacle-bench_trampa.pn
 const IMG_BENCH_TRAP_INACTIVE = require('../../assets/obstaculos/obstacle-bench_trampa_estado_inicial.png');
 const IMG_CLOUD = require('../../assets/trampas/nubes.png');
 const IMG_CLOUD_TRAP = require('../../assets/trampas/nube_trampa.png');
-const IMG_LAKE = require('../../assets/trampas/lago_trampa.png');
+const IMG_LAKE_FRAMES = [
+  {
+    source: require('../../assets/trampas/lago_trampa.png'),
+    contentLeft: 96,
+    contentWidth: 1184,
+    surfaceY: 350,
+  },
+  {
+    source: require('../../assets/trampas/lago_trampa2.png'),
+    contentLeft: 68,
+    contentWidth: 1160,
+    surfaceY: 345,
+  },
+  {
+    source: require('../../assets/trampas/lago_trampa3.png'),
+    contentLeft: 344,
+    contentWidth: 684,
+    surfaceY: 338,
+  },
+];
 const IMG_SLIMES = [
   require('../../assets/trampas/baba1.png'),
   require('../../assets/trampas/baba2.png'),
   require('../../assets/trampas/baba3.png'),
   require('../../assets/trampas/baba4.png'),
 ];
-const IMG_MONSTER_GREEN_ANGRY = require('../../assets/monstruos/monster-green_enojado.png');
 
 const IMG_ESCALERAS = [
   require('../../assets/obstaculos/escalera1.png'),
@@ -274,9 +354,86 @@ const IMG_ESCALERA_SURFACES = [0.46, 0.38, 0.4, 0.4];
 // Portal entre niveles y fondos por nivel
 const IMG_PORTAL_1 = require('../../assets/otros/portal_movimiento1.png');
 const IMG_PORTAL_2 = require('../../assets/otros/portal_movimiento2.png');
+const IMG_PORTAL_NIVEL2_FRAMES = [
+  require('../../assets/otros/portal1_nivel2.png'),
+  require('../../assets/otros/portal2_nivel2.png'),
+  require('../../assets/otros/portal3_nivel2.png'),
+];
 const IMG_BG_LEVEL_1 = require('../../assets/fondos/fondo.jpg');
 const IMG_BG_LEVEL_2 = require('../../assets/fondos/fondo_nivel2.jpg');
+const IMG_BG_LEVEL_3 = require('../../assets/fondos/fondo_nivel3.jpg');
 const IMG_META = require('../../assets/otros/meta.png');
+const IMG_URCHIN_WARNING = require('../../assets/otros/peligro.png');
+const OCTO_SPRITES = [
+  [
+    require('../../assets/monstruos/pulpos1.png'),
+    require('../../assets/monstruos/pulpos1_2.0.png'),
+    require('../../assets/monstruos/pulpos1_ataque.png'),
+  ],
+  [
+    require('../../assets/monstruos/pulpos2.png'),
+    require('../../assets/monstruos/pulpos2_2.0.png'),
+    require('../../assets/monstruos/pulpos2_ataque.png'),
+  ],
+  [
+    require('../../assets/monstruos/pulpos3.png'),
+    require('../../assets/monstruos/pulpos3_2.0.png'),
+    require('../../assets/monstruos/pulpos3_ataque.png'),
+  ],
+];
+const OCTO_PIECE_BOTTOM_Y = [
+  [271, 307, 301],
+  [265, 295, 379],
+  [263, 297, 343],
+];
+const OCTO_BOTTOM_PIECE_BOTTOM_Y = [
+  [573, 631, 631],
+  [603, 707, 681],
+  [623, 703, 575],
+];
+const URCHIN_FRAMES = [
+  {
+    source: require('../../assets/monstruos/erizo1.png'),
+    left: 488,
+    right: 852,
+    top: 204,
+    bottom: 564,
+  },
+  {
+    source: require('../../assets/monstruos/erizo2.png'),
+    left: 544,
+    right: 820,
+    top: 256,
+    bottom: 560,
+  },
+];
+
+const createOctopusColumns = (): OctopusColumn[] =>
+  [820, 1140, 1340, 1960, 2440, 2680].map((x, index) => ({
+    id: index + 1,
+    x,
+    variant: (index % 3) as 0 | 1 | 2,
+    triggered: false,
+    attackUntil: 0,
+  }));
+
+const urchinFrameStyle = (
+  frame: (typeof URCHIN_FRAMES)[number]
+) => {
+  const contentWidth = frame.right - frame.left;
+  const contentHeight = frame.bottom - frame.top;
+  const scale = Math.min(
+    URCHIN_VISIBLE_SIZE / contentWidth,
+    URCHIN_VISIBLE_SIZE / contentHeight
+  );
+  return {
+    position: 'absolute' as const,
+    left: -frame.left * scale,
+    bottom: -(URCHIN_IMAGE_HEIGHT - frame.bottom) * scale,
+    width: URCHIN_IMAGE_WIDTH * scale,
+    height: URCHIN_IMAGE_HEIGHT * scale,
+  };
+};
 
 // Sprites de la vaquita (animación por estados)
 const IMG_COW_IDLE = require('../../assets/vaquita/caminando1.png');
@@ -561,6 +718,21 @@ const UPPER_ROUTE_OBSTACLES: InitialObstacleSpec[] = [
     height: ESPINAS_GAP_HEIGHT,
   },
   {
+    type: 'floor_spines' as const,
+    x: UPPER_ROUTE_END_X - ESPINAS_IMAGE_WIDTH,
+    bottom: GROUND_HEIGHT,
+    width: ESPINAS_IMAGE_WIDTH,
+    height: ESPINAS_GAP_HEIGHT,
+  },
+  {
+    type: 'spines_barrier' as const,
+    x: LAST_CHASE_PLATFORM_X + CHASE_ARENA_PLATFORM_WIDTH + 20,
+    bottom: GROUND_HEIGHT,
+    width: 30,
+    height: SCREEN_HEIGHT - GROUND_HEIGHT,
+    finalBarrier: true,
+  },
+  {
     type: 'bat_trigger' as const,
     x: BAT_TRIGGER_X,
     bottom: BAT_TRIGGER_BOTTOM,
@@ -612,13 +784,13 @@ const CHASE_OBSTACLES: InitialObstacleSpec[] = [
     height: BAT_HEIGHT,
     batWave: 2 as const,
   })),
-  ...[
-    { x: CHASE_SECTION_START + 180, bottom: GROUND_HEIGHT },
-    { x: CHASE_SECTION_START + 900, bottom: GROUND_HEIGHT },
-  ].map((anchor) => ({
+  ...[0, 1, 2].map((index) => ({
     type: 'chase_spike' as const,
-    x: anchor.x,
-    bottom: anchor.bottom,
+    x:
+      CHASE_SECTION_START +
+      260 +
+      index * ((LAST_CHASE_PLATFORM_X - CHASE_SECTION_START - 400) / 2),
+    bottom: GROUND_HEIGHT,
     width: CHASE_SPIKE_WIDTH,
     height: CHASE_SPIKE_HEIGHT,
   })),
@@ -627,12 +799,12 @@ const CHASE_OBSTACLES: InitialObstacleSpec[] = [
     { x: CHASE_SECTION_START + 700, bottom: GROUND_HEIGHT + 100 },
     { x: CHASE_SECTION_START + 1140, bottom: GROUND_HEIGHT + 250 },
     { x: CHASE_SECTION_START + 1580, bottom: GROUND_HEIGHT + 70 },
-    { x: CHASE_SECTION_START + 2020, bottom: GROUND_HEIGHT + 190 },
+    { x: LAST_CHASE_PLATFORM_X, bottom: GROUND_HEIGHT + 190 },
   ].map((anchor) => ({
     type: 'upper_platform' as const,
     x: anchor.x,
     bottom: anchor.bottom,
-    width: 150,
+    width: CHASE_ARENA_PLATFORM_WIDTH,
     height: 60,
     visualKind: 'pisoflotante' as const,
     arenaPlatform: true,
@@ -651,9 +823,9 @@ const LEVELS: LevelConfig[] = [
   {
     id: 1,
     name: 'Nivel 1: Praderas',
-    width: 4400,
-    water: { x: 3200, width: 600, bottom: GROUND_HEIGHT, height: 60 },
-    goal: { x: 3900, bottom: GROUND_HEIGHT, width: 60, height: 100 },
+    width: LEVEL1_WIDTH,
+    water: { x: LAKE_HITBOX_X, width: LAKE_HITBOX_WIDTH, bottom: GROUND_HEIGHT, height: 60 },
+    goal: { x: LEVEL1_GOAL_X, bottom: GROUND_HEIGHT, width: 60, height: 100 },
 obstacles: [
         { type: 'crate', x: 300, width: 140, height: 70 },
         { type: 'enemy', x: 850, width: ENEMY_WIDTH, height: ENEMY_HEIGHT, patrolCenterX: 720, patrolRange: 370 },
@@ -662,15 +834,14 @@ obstacles: [
         { type: 'destructible', x: 1600, width: 120, height: 70 },
         { type: 'hole_trap', x: 1815, width: HOLE_TRAP_WIDTH, height: HOLE_TRAP_HEIGHT },
         { type: 'moving', x: 2050, width: 140, height: 70 },
-        { type: 'spike_trap', x: 2300, width: 125, height: SPIKE_HEIGHT },
         { type: 'enemy', x: 2550, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
         // Piedras de la trampa del lago: apoyadas en el suelo a ambos lados
-        { type: 'crate', x: 3200, width: 150, height: 80 },
-        { type: 'crate', x: 3650, width: 150, height: 80 },
+        { type: 'crate', x: LAKE_ROCK_LEFT_X, width: LAKE_ROCK_WIDTH, height: LAKE_ROCK_HEIGHT },
+        { type: 'crate', x: LAKE_ROCK_RIGHT_X, width: LAKE_ROCK_WIDTH, height: LAKE_ROCK_HEIGHT },
         // Plataforma de nube sobre el lago para cruzarlo
-        { type: 'cloud_trap', x: 3425, bottom: GROUND_HEIGHT + 80, width: 150, height: CLOUD_TRAP_HEIGHT },
+        { type: 'cloud_trap', x: 3425, bottom: LAKE_CLOUD_BOTTOM, width: 150, height: CLOUD_TRAP_HEIGHT },
         // Portal junto a la bandera para viajar al nivel 2
-        { type: 'portal', x: 4010, width: PORTAL_WIDTH, height: PORTAL_HEIGHT },
+        { type: 'portal', x: LEVEL1_PORTAL_X, width: PORTAL_WIDTH, height: PORTAL_HEIGHT },
       ],
   },
   {
@@ -686,21 +857,7 @@ obstacles: [
     width: 3600,
     procedural: false,
     goal: { x: 3200, bottom: GROUND_HEIGHT, width: 60, height: 100 },
-    obstacles: [
-      { type: 'crate', x: 350, width: 140, height: 70 },
-      { type: 'spike_trap', x: 800, width: 125, height: SPIKE_HEIGHT },
-      { type: 'enemy', x: 1250, width: ENEMY_WIDTH, height: ENEMY_HEIGHT },
-      {
-        type: 'upper_platform',
-        x: 1700,
-        bottom: GROUND_HEIGHT + 120,
-        width: 180,
-        height: 60,
-        visualKind: 'pisoflotante',
-      },
-      { type: 'moving', x: 2200, width: 140, height: 70 },
-      { type: 'enemy', x: 2700, width: BOSS_WIDTH, height: BOSS_HEIGHT, isBoss: true },
-    ],
+    obstacles: [],
   },
 ];
 
@@ -807,8 +964,14 @@ interface Obstacle {
   active?: boolean;
   moving?: boolean;
   fireballWindup?: boolean;
+  chaseRushUntil?: number;
   airborne?: boolean;
   enemyJumpTimer?: number;
+  bossState?: 'patrol' | 'windup' | 'charge';
+  bossStateUntil?: number;
+  bossNextActionAt?: number;
+  bossLastX?: number;
+  bossStuckFor?: number;
   spawnedAt?: number;
   batHomeX?: number;
   batHomeBottom?: number;
@@ -836,12 +999,38 @@ interface Fireball {
 interface Bullet {
   id: number;
   x: number;
+  originX: number;
   y: number;
   dir: Facing;
   vx: number;
   width: number;
   height: number;
   born: number;
+}
+
+interface OctopusColumn {
+  id: number;
+  x: number;
+  variant: 0 | 1 | 2;
+  triggered: boolean;
+  attackUntil: number;
+}
+
+interface OctopusBall {
+  id: number;
+  x: number;
+  bottom: number;
+  vx: number;
+  vy: number;
+  born: number;
+}
+
+interface Urchin {
+  id: number;
+  x: number;
+  bottom: number;
+  landed: boolean;
+  expiresAt?: number;
 }
 
 interface FloatingCoin {
@@ -1063,8 +1252,8 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
         speed: bossSpeed,
         facing: enemyFacing,
         vx: enemyFacing === 'left' ? -bossSpeed : bossSpeed,
-        startX: spec.x,
-        range: ENEMY_PATROL_RANGE * 2,
+        startX: BOSS_ARENA_START_X,
+        range: BOSS_ARENA_RANGE,
         vy: 0,
         health: bossHealth,
         maxHealth: bossHealth,
@@ -1722,11 +1911,14 @@ const getBossCollisionBox = (obstacle: Obstacle): Rect => {
       obstacle.height,
       BOSS_ASPECT_RATIO
     );
+    const insetX = sprite.width * 0.12;
+    const insetBottom = sprite.height * 0.06;
+    const insetTop = sprite.height * 0.08;
     return {
-      x: obstacle.x + (obstacle.width - sprite.width) / 2,
-      bottom: obstacle.bottom,
-      width: sprite.width,
-      height: sprite.height,
+      x: obstacle.x + (obstacle.width - sprite.width) / 2 + insetX,
+      bottom: obstacle.bottom + insetBottom,
+      width: sprite.width - insetX * 2,
+      height: sprite.height - insetBottom - insetTop,
     };
   }
   if (obstacle.type === 'piranha') {
@@ -1823,37 +2015,26 @@ const HoleTrapObstacle = React.memo(function HoleTrapObstacle({
     Math.max(0, (now - (obstacle.holeOpenedAt ?? now)) / HOLE_OPEN_DURATION)
   );
 
-  const drawnWidth = obstacle.width + 30;
-  const drawnHeight = 72;
-  const scaleX = drawnWidth / HOLE_IMAGE_CONTENT_WIDTH;
-  const scaleY = drawnHeight / HOLE_IMAGE_CONTENT_HEIGHT;
+  const scale = (obstacle.width + 30) / HOLE_IMAGE_CONTENT_WIDTH;
 
   return (
-    <View
-      pointerEvents="none"
+    <Image
+      source={IMG_HOLE}
       style={{
         position: 'absolute',
-        left: Number(left) - drawnWidth / 2,
-        bottom: 6,
-        width: drawnWidth,
-        height: drawnHeight,
-        overflow: 'hidden',
+        left:
+          Number(left) -
+          (HOLE_IMAGE_CONTENT_X + HOLE_IMAGE_CONTENT_WIDTH / 2) * scale,
+        bottom:
+          -(HOLE_IMAGE_HEIGHT - HOLE_IMAGE_CONTENT_Y - HOLE_IMAGE_CONTENT_HEIGHT) *
+          scale,
+        width: HOLE_IMAGE_WIDTH * scale,
+        height: HOLE_IMAGE_HEIGHT * scale,
         opacity: progress,
         zIndex: 4,
       }}
-    >
-      <Image
-        source={IMG_HOLE}
-        style={{
-          position: 'absolute',
-          left: -HOLE_IMAGE_CONTENT_X * scaleX,
-          top: -HOLE_IMAGE_CONTENT_Y * scaleY,
-          width: HOLE_IMAGE_WIDTH * scaleX,
-          height: HOLE_IMAGE_HEIGHT * scaleY,
-        }}
-        resizeMode="stretch"
-      />
-    </View>
+      resizeMode="stretch"
+    />
   );
 });
 
@@ -1988,7 +2169,15 @@ const EnemyObstacle = React.memo(function EnemyObstacle({
   obstacle,
   left,
   cowScreenX,
-}: ObstacleViewProps & { cowScreenX?: number }) {
+  bossSpeed,
+  bossMoving,
+  bossFacing,
+}: ObstacleViewProps & {
+  cowScreenX?: number;
+  bossSpeed?: number;
+  bossMoving?: boolean;
+  bossFacing?: Facing;
+}) {
   const isBoss = obstacle.isBoss || obstacle.bossConfig;
   const health = obstacle.health ?? 1;
   const maxHealth = obstacle.maxHealth ?? 1;
@@ -2037,33 +2226,41 @@ const EnemyObstacle = React.memo(function EnemyObstacle({
           </View>
         </View>
       )}
-      <Enemy
-        facing={obstacle.facing ?? 'right'}
-        width={obstacle.width}
-        height={obstacle.height}
-        aspectRatio={
-          isBoss
-            ? BOSS_ASPECT_RATIO
-            : isAngry
-              ? ENEMY_ANGRY_ASPECT_RATIO
-              : ENEMY_ASPECT_RATIO
-        }
-          imageSource={
-            isBoss
-              ? isHit
-                ? IMG_MONSTER_GREEN_ANGRY
-                : require('../../assets/monstruos/monster-green.png')
-              : isAngry
-                ? require('../../assets/monstruos/mosntruo_enojado.png')
-                : require('../../assets/monstruos/monstruo.png')
+      {isBoss ? (
+        <BossEnemySprite
+          facing={bossFacing ?? obstacle.facing ?? 'right'}
+          width={obstacle.width}
+          height={obstacle.height}
+          aspectRatio={BOSS_ASPECT_RATIO}
+          speed={bossSpeed ?? Math.abs(obstacle.vx ?? 0)}
+          moving={bossMoving ?? (!isHit && Math.abs(obstacle.vx ?? 0) > 1)}
+          hitFlash={isHit}
+          style={{
+            width: obstacle.width,
+            height: obstacle.height,
+          }}
+        />
+      ) : (
+        <Enemy
+          facing={obstacle.facing ?? 'right'}
+          width={obstacle.width}
+          height={obstacle.height}
+          aspectRatio={
+            isAngry ? ENEMY_ANGRY_ASPECT_RATIO : ENEMY_ASPECT_RATIO
           }
-        style={{
-          width: obstacle.width,
-          height: obstacle.height,
-          opacity: isHit ? 0.5 : 1,
-          transform: isHit ? [{ scale: 1.1 }] : undefined,
-        }}
-      />
+          imageSource={
+            isAngry
+              ? require('../../assets/monstruos/mosntruo_enojado.png')
+              : require('../../assets/monstruos/monstruo.png')
+          }
+          style={{
+            width: obstacle.width,
+            height: obstacle.height,
+            opacity: isHit ? 0.5 : 1,
+            transform: isHit ? [{ scale: 1.1 }] : undefined,
+          }}
+        />
+      )}
     </View>
   );
 });
@@ -2324,25 +2521,58 @@ const ChaseSpike = React.memo(function ChaseSpike({
   );
 });
 
+const lakeFrameStyle = (frame: (typeof IMG_LAKE_FRAMES)[number]) => {
+  const scale = LAKE_IMAGE_WIDTH / frame.contentWidth;
+  return {
+    position: 'absolute' as const,
+    left: -frame.contentLeft * scale,
+    bottom:
+      LAKE_SURFACE_Y -
+      (LAKE_CANVAS_HEIGHT - frame.surfaceY) * scale -
+      LAKE_IMAGE_BOTTOM,
+    width: LAKE_CANVAS_WIDTH * scale,
+    height: LAKE_CANVAS_HEIGHT * scale,
+  };
+};
+
 const WaterZone = React.memo(function WaterZone({
   obstacle,
   left,
-}: PlatformViewProps) {
+  now,
+}: PlatformViewProps & { now: number }) {
+  const framePhase = now / LAKE_FRAME_SECONDS;
+  const frameIndex = Math.floor(framePhase) % IMG_LAKE_FRAMES.length;
+  const nextFrameIndex = (frameIndex + 1) % IMG_LAKE_FRAMES.length;
+  const frameT = framePhase - Math.floor(framePhase);
+  const frameBlend = frameT * frameT * (3 - 2 * frameT);
+
   return (
     <View
       style={[
         styles.waterZone,
         {
-          left: Number(left),
-          // El lago ocupa todo el piso: se extiende por debajo del borde
-          // inferior de la pantalla y sube hasta la superficie del suelo.
-          bottom: -24,
-          width: obstacle.width,
-          height: GROUND_HEIGHT + obstacle.height + 72,
+          left: Number(left) + LAKE_IMAGE_LEFT_OFFSET,
+          bottom: LAKE_IMAGE_BOTTOM,
+          width: LAKE_IMAGE_WIDTH,
+          height: LAKE_IMAGE_HEIGHT,
         },
       ]}
     >
-      <Image source={IMG_LAKE} style={styles.waterImg} resizeMode="stretch" />
+      <Image
+        source={IMG_LAKE_FRAMES[frameIndex].source}
+        style={lakeFrameStyle(IMG_LAKE_FRAMES[frameIndex])}
+        resizeMode="stretch"
+        fadeDuration={0}
+      />
+      <Image
+        source={IMG_LAKE_FRAMES[nextFrameIndex].source}
+        style={[
+          lakeFrameStyle(IMG_LAKE_FRAMES[nextFrameIndex]),
+          { opacity: frameBlend },
+        ]}
+        resizeMode="stretch"
+        fadeDuration={0}
+      />
     </View>
   );
 });
@@ -2429,12 +2659,24 @@ const Portal = React.memo(function Portal({
   obstacle,
   left,
   now,
-}: PlatformViewProps & { now: number }) {
+  level,
+}: PlatformViewProps & { now: number; level: number }) {
   // Fundido suave entre los dos sprites + giro y respiración lentos.
   const blend = (Math.sin(now * PORTAL_ANIM_SPEED) + 1) / 2;
   const pulse = 1 + Math.sin(now * PORTAL_ANIM_SPEED) * 0.035;
   const rotation = ((now * PORTAL_ROTATION_SPEED) % 360).toFixed(1);
   const glowOpacity = 0.28 + blend * 0.22;
+
+  const level2 = level >= 2;
+  const slowWave = (Math.sin(now * PORTAL_NIVEL2_PULSE_SPEED) + 1) / 2;
+  const framePhase = now / PORTAL_NIVEL2_FRAME_SECONDS;
+  const frameIndex =
+    Math.floor(framePhase) % IMG_PORTAL_NIVEL2_FRAMES.length;
+  const nextFrameIndex =
+    (frameIndex + 1) % IMG_PORTAL_NIVEL2_FRAMES.length;
+  const frameT = framePhase - Math.floor(framePhase);
+  const frameBlend = frameT * frameT * (3 - 2 * frameT);
+  const level2Rotation = ((now * PORTAL_NIVEL2_ROTATION_SPEED) % 360).toFixed(1);
 
   return (
     <View
@@ -2445,23 +2687,51 @@ const Portal = React.memo(function Portal({
           bottom: Number(obstacle.bottom),
           width: obstacle.width,
           height: obstacle.height,
-          transform: [{ scale: pulse }, { rotate: `${rotation}deg` }],
+          transform: [
+            { scale: level2 ? 1 + slowWave * 0.02 : pulse },
+            { rotate: `${level2 ? level2Rotation : rotation}deg` },
+          ],
         },
       ]}
     >
-      <View style={[styles.portalGlow, { opacity: glowOpacity }]} />
-      <Image
-        source={IMG_PORTAL_1}
-        style={[styles.portalImgLayer, { opacity: blend }]}
-        resizeMode="cover"
-        fadeDuration={0}
+      <View
+        style={[
+          styles.portalGlow,
+          level2 && { backgroundColor: '#2fb8ff', shadowColor: '#7fe8ff' },
+          { opacity: level2 ? 0.3 + slowWave * 0.16 : glowOpacity },
+        ]}
       />
-      <Image
-        source={IMG_PORTAL_2}
-        style={[styles.portalImgLayer, { opacity: 1 - blend }]}
-        resizeMode="cover"
-        fadeDuration={0}
-      />
+      {level2 ? (
+        <>
+          <Image
+            source={IMG_PORTAL_NIVEL2_FRAMES[frameIndex]}
+            style={styles.portalImgLayer}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+          <Image
+            source={IMG_PORTAL_NIVEL2_FRAMES[nextFrameIndex]}
+            style={[styles.portalImgLayer, { opacity: frameBlend }]}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+        </>
+      ) : (
+        <>
+          <Image
+            source={IMG_PORTAL_1}
+            style={[styles.portalImgLayer, { opacity: blend }]}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+          <Image
+            source={IMG_PORTAL_2}
+            style={[styles.portalImgLayer, { opacity: 1 - blend }]}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+        </>
+      )}
     </View>
   );
 });
@@ -2508,6 +2778,175 @@ const FloatingCoinComponent = React.memo(function FloatingCoinComponent({
   );
 });
 
+const GROUND_TUFTS = Array.from({ length: 22 }, (_, index) => {
+  const wave = Math.abs(Math.sin(index * 2.7));
+  return {
+    left: (index / 22) * 100 + (wave - 0.5) * 3.5,
+    top: -4 + Math.round(wave * 3),
+    width: 6 + Math.round(wave * 9),
+    height: 4 + Math.round(Math.abs(Math.cos(index * 1.9)) * 6),
+    opacity: 0.4 + wave * 0.35,
+  };
+});
+
+const GroundSurface = React.memo(function GroundSurface({
+  isNight,
+  isUnderwater,
+}: {
+  isNight: boolean;
+  isUnderwater: boolean;
+}) {
+  const stoneColor = isUnderwater ? '#17495c' : isNight ? '#3c3543' : '#8d765c';
+  const stoneBorderColor = isUnderwater ? '#0c2f3f' : isNight ? '#241f29' : '#5f4c39';
+  const stoneTopColor = isUnderwater ? '#2b7085' : isNight ? '#4d4554' : '#a8927a';
+  const speckLightColor = isUnderwater ? '#4aa2b8' : isNight ? '#4d4554' : '#a8927a';
+  const speckDarkColor = isUnderwater ? '#0b2a38' : isNight ? '#241f29' : '#5f4c39';
+  const grassColor = isUnderwater ? '#1d6f80' : isNight ? '#3a3444' : '#74c947';
+  const edgeShadeColor = isUnderwater ? '#0d3d50' : isNight ? '#221d28' : '#4a8c2a';
+  const tuftColor = isUnderwater ? '#38a6bb' : isNight ? '#4d4554' : '#74c947';
+  const crackColor = isUnderwater ? '#0b2a38' : '#241f29';
+
+  return (
+    <>
+      <View style={styles.stoneRow}>
+        {Array.from({ length: 8 }, (_, tileIndex) => (
+          <View
+            key={tileIndex}
+            style={[
+              styles.stoneBlock,
+              {
+                backgroundColor: stoneColor,
+                borderColor: stoneBorderColor,
+                borderTopColor: stoneTopColor,
+              },
+            ]}
+          >
+            <View style={styles.groundTileInner}>
+              {Array.from({ length: 9 }, (_, speckIndex) => {
+                const seed = tileIndex * 7 + speckIndex * 13;
+                const isLight = speckIndex % 2 === 0;
+                return (
+                  <View
+                    key={speckIndex}
+                    style={[
+                      styles.groundSpeck,
+                      {
+                        left: `${6 + ((seed * 11) % 80)}%`,
+                        top: `${8 + ((seed * 17) % 70)}%`,
+                        width: 3 + (seed % 4),
+                        height: 2 + (seed % 2),
+                        backgroundColor: isLight ? speckLightColor : speckDarkColor,
+                        opacity: isNight || isUnderwater ? 0.5 : 0.42,
+                      },
+                    ]}
+                  />
+                );
+              })}
+              {(isNight || isUnderwater) &&
+                [0, 1].map((crackIndex) => {
+                  const seed = tileIndex * 19 + crackIndex * 37;
+                  return (
+                    <View
+                      key={`crack-${crackIndex}`}
+                      style={[
+                        styles.groundCrack,
+                        {
+                          left: `${20 + (seed % 55)}%`,
+                          top: `${18 + ((seed * 3) % 50)}%`,
+                          height: 8 + crackIndex * 5,
+                          backgroundColor: crackColor,
+                          opacity: 0.4,
+                          transform: [
+                            { rotate: crackIndex % 2 === 0 ? '18deg' : '-14deg' },
+                          ],
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              <View
+                style={[
+                  styles.groundBevelTop,
+                  {
+                    backgroundColor: stoneTopColor,
+                    opacity: isNight || isUnderwater ? 0.35 : 0.45,
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  styles.groundBevel,
+                  {
+                    backgroundColor: stoneBorderColor,
+                    opacity: isNight || isUnderwater ? 0.6 : 0.45,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        ))}
+      </View>
+      <View
+        style={[
+          styles.grass,
+          {
+            backgroundColor: grassColor,
+            borderBottomColor: edgeShadeColor,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.grassHighlight,
+            isNight && styles.grassHighlightNight,
+          ]}
+        />
+        <View
+          style={[
+            styles.groundEdgeLight,
+            {
+              backgroundColor: tuftColor,
+              opacity: isNight ? 0.5 : 0.65,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.groundEdgeShade,
+            {
+              backgroundColor: edgeShadeColor,
+              opacity: isNight || isUnderwater ? 0.6 : 0.5,
+            },
+          ]}
+        />
+        {GROUND_TUFTS.map((tuft, index) => (
+          <View
+            key={index}
+            style={{
+              position: 'absolute',
+              left: `${tuft.left}%`,
+              top: tuft.top,
+              width: tuft.width,
+              height: tuft.height,
+              borderRadius: tuft.width / 2,
+              backgroundColor: tuftColor,
+              opacity: isNight ? tuft.opacity * 0.7 : tuft.opacity,
+            }}
+          />
+        ))}
+      </View>
+      {(isNight || isUnderwater) && (
+        <View
+          style={[
+            styles.groundFog,
+            isUnderwater && { backgroundColor: 'rgba(120, 220, 240, 0.10)' },
+          ]}
+        />
+      )}
+    </>
+  );
+});
+
 export default function GameScreen({ onExit }: GameScreenProps) {  const screenWidth =
     Number.isFinite(SCREEN_WIDTH) && SCREEN_WIDTH > 0
       ? SCREEN_WIDTH
@@ -2520,6 +2959,12 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const [obstacles, setObstacles] = useState<Obstacle[]>(() => createInitialObstacles(1));
   const [terrain, setTerrain] = useState<TerrainSegment[]>(createInitialTerrain);
   const [bullets, setBullets] = useState<Bullet[]>([]);
+  const [urchins, setUrchins] = useState<Urchin[]>([]);
+  const [urchinWarning, setUrchinWarning] = useState<number | null>(null);
+  const [octopusColumns, setOctopusColumns] = useState<OctopusColumn[]>(
+    createOctopusColumns
+  );
+  const [octopusBalls, setOctopusBalls] = useState<OctopusBall[]>([]);
   const [floatingCoins, setFloatingCoins] = useState<FloatingCoin[]>([]);
   const [levelCoins, setLevelCoins] = useState<Coin[]>(() => createLevelCoins(1));
   const [view, setView] = useState<ViewState>({
@@ -2562,6 +3007,10 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const isGroundedRef = useRef(true);
   const platformExitRef = useRef<{ top: number; until: number } | null>(null);
   const jumpCountRef = useRef(0);
+  const [isDiving, setIsDiving] = useState(false);
+  const downHeldRef = useRef(false);
+  const upHeldRef = useRef(false);
+  const underwaterBottomRef = useRef(UNDERWATER_START_BOTTOM);
 
   useLayoutEffect(() => {
     if (cowBottomRef.current >= GROUND_HEIGHT - 0.5) {
@@ -2579,6 +3028,17 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const obstaclesRef = useRef<Obstacle[]>(obstacles);
   const terrainRef = useRef<TerrainSegment[]>(terrain);
   const bulletsRef = useRef<Bullet[]>([]);
+  const urchinsRef = useRef<Urchin[]>([]);
+  const urchinWarningRef = useRef<number | null>(null);
+  const urchinWarningUntilRef = useRef(0);
+  const urchinZoneRef = useRef(0);
+  const urchinWaveUntilRef = useRef(0);
+  const nextUrchinSpawnAtRef = useRef(0);
+  const nextUrchinEventAtRef = useRef(0);
+  const urchinIdRef = useRef(0);
+  const octopusColumnsRef = useRef<OctopusColumn[]>(createOctopusColumns());
+  const octopusBallsRef = useRef<OctopusBall[]>([]);
+  const octopusBallIdRef = useRef(0);
   const [fireballs, setFireballs] = useState<Fireball[]>([]);
   const fireballsRef = useRef<Fireball[]>([]);
   const [powerOrb, setPowerOrb] = useState<{ x: number; bottom: number } | null>(null);
@@ -2860,6 +3320,216 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         cowXRef.current = Math.max(0, resolved.x);
       }
 
+      const isUnderwater = levelRef.current >= 3;
+      if (isUnderwater) {
+        if (downHeldRef.current) {
+          underwaterBottomRef.current -= UNDERWATER_VERTICAL_SPEED * delta;
+        } else if (upHeldRef.current) {
+          underwaterBottomRef.current += UNDERWATER_VERTICAL_SPEED * delta;
+        }
+        underwaterBottomRef.current = Math.max(
+          UNDERWATER_MIN_BOTTOM,
+          Math.min(UNDERWATER_MAX_BOTTOM, underwaterBottomRef.current)
+        );
+        const bob =
+          downHeldRef.current || upHeldRef.current
+            ? 0
+            : Math.sin(time / 1000 * 1.5) * 3;
+        cowBottomRef.current = underwaterBottomRef.current + bob;
+        velocityYRef.current = 0;
+        isGroundedRef.current = false;
+      }
+
+      if (isUnderwater && !gameOverRef.current && !levelCompletedRef.current) {
+        const nowSeconds = time / 1000;
+
+        const aliveCount = urchinsRef.current.length;
+        urchinsRef.current = urchinsRef.current.filter(
+          (urchin) =>
+            !(
+              urchin.landed &&
+              urchin.expiresAt !== undefined &&
+              nowSeconds >= urchin.expiresAt
+            )
+        );
+        if (urchinsRef.current.length !== aliveCount) {
+          setUrchins([...urchinsRef.current]);
+        }
+
+        if (
+          urchinWaveUntilRef.current > 0 &&
+          nowSeconds >= urchinWaveUntilRef.current
+        ) {
+          urchinWaveUntilRef.current = 0;
+          nextUrchinEventAtRef.current = nowSeconds + randomBetween(4, 8);
+        }
+
+        if (
+          urchinWarningRef.current !== null &&
+          nowSeconds >= urchinWarningUntilRef.current
+        ) {
+          urchinZoneRef.current = urchinWarningRef.current;
+          urchinWarningRef.current = null;
+          setUrchinWarning(null);
+          urchinWaveUntilRef.current = nowSeconds + URCHIN_WAVE_SECONDS;
+          nextUrchinSpawnAtRef.current = nowSeconds;
+        }
+
+        if (
+          urchinWarningRef.current === null &&
+          urchinWaveUntilRef.current === 0 &&
+          nowSeconds >= nextUrchinEventAtRef.current
+        ) {
+          urchinWarningRef.current = Math.max(
+            60,
+            cowXRef.current + randomBetween(-120, 220)
+          );
+          urchinWarningUntilRef.current =
+            nowSeconds + URCHIN_WARNING_SECONDS;
+          setUrchinWarning(urchinWarningRef.current);
+        }
+
+        if (
+          urchinWaveUntilRef.current > 0 &&
+          nowSeconds >= nextUrchinSpawnAtRef.current
+        ) {
+          if (urchinsRef.current.length >= 40) {
+            urchinsRef.current.shift();
+          }
+          urchinIdRef.current += 1;
+          urchinsRef.current.push({
+            id: urchinIdRef.current,
+            x: Math.max(
+              URCHIN_VISIBLE_SIZE / 2,
+              urchinZoneRef.current + randomBetween(-90, 90)
+            ),
+            bottom: SCREEN_HEIGHT + URCHIN_VISIBLE_SIZE,
+            landed: false,
+          });
+          setUrchins([...urchinsRef.current]);
+          nextUrchinSpawnAtRef.current = nowSeconds + URCHIN_SPAWN_INTERVAL;
+        }
+
+        let urchinsChanged = false;
+        for (const urchin of urchinsRef.current) {
+          if (!urchin.landed) {
+            urchin.bottom -= URCHIN_FALL_SPEED * delta;
+            const stacked = urchinsRef.current.filter(
+              (other) =>
+                other.landed &&
+                other.id !== urchin.id &&
+                Math.abs(other.x - urchin.x) < URCHIN_VISIBLE_SIZE * 0.7
+            ).length;
+            const floor =
+              GROUND_HEIGHT +
+              URCHIN_VISIBLE_SIZE / 2 +
+              stacked * URCHIN_VISIBLE_SIZE * 0.55;
+            if (urchin.bottom <= floor) {
+              urchin.bottom = floor;
+              urchin.landed = true;
+              urchin.expiresAt = nowSeconds + URCHIN_LIFETIME_SECONDS;
+              urchinsChanged = true;
+            }
+          }
+
+          if (
+            cowXRef.current < urchin.x + URCHIN_VISIBLE_SIZE / 2 &&
+            cowXRef.current + COW_WIDTH > urchin.x - URCHIN_VISIBLE_SIZE / 2 &&
+            cowBottomRef.current < urchin.bottom + URCHIN_VISIBLE_SIZE / 2 &&
+            cowBottomRef.current + COW_HEIGHT >
+              urchin.bottom - URCHIN_VISIBLE_SIZE / 2
+          ) {
+            takeDamage();
+          }
+        }
+        if (urchinsChanged) {
+          setUrchins([...urchinsRef.current]);
+        }
+      }
+
+      if (isUnderwater && !gameOverRef.current && !levelCompletedRef.current) {
+        const nowSeconds = time / 1000;
+        let columnsChanged = false;
+        const gapBottom = OCTO_GAP_CENTER - OCTO_GAP_HEIGHT / 2;
+        const gapTop = OCTO_GAP_CENTER + OCTO_GAP_HEIGHT / 2;
+
+        for (const column of octopusColumnsRef.current) {
+          const overlapsColumnX =
+            cowXRef.current + COW_WIDTH > column.x - 90 &&
+            cowXRef.current < column.x + 90;
+          const overlapsSolid =
+            overlapsColumnX &&
+            (cowBottomRef.current + COW_HEIGHT > gapTop ||
+              cowBottomRef.current < gapBottom);
+          if (overlapsSolid) {
+            takeDamage();
+          }
+
+          const inGap =
+            cowBottomRef.current >= gapBottom - 8 &&
+            cowBottomRef.current + COW_HEIGHT <= gapTop + 8;
+          if (
+            !column.triggered &&
+            inGap &&
+            cowXRef.current + COW_WIDTH > column.x - 34 &&
+            cowXRef.current < column.x + 34
+          ) {
+            column.triggered = true;
+            column.attackUntil = nowSeconds + OCTO_ATTACK_SECONDS;
+            columnsChanged = true;
+
+            const originX = column.x;
+            const originBottom = OCTO_GAP_CENTER;
+            const targetX = cowXRef.current + COW_WIDTH / 2;
+            const targetBottom = cowBottomRef.current + COW_HEIGHT / 2;
+            const dx = targetX - originX;
+            const dy = targetBottom - originBottom;
+            const distance = Math.max(1, Math.hypot(dx, dy));
+            octopusBallIdRef.current += 1;
+            octopusBallsRef.current.push({
+              id: octopusBallIdRef.current,
+              x: originX,
+              bottom: originBottom,
+              vx: (dx / distance) * OCTO_BALL_SPEED,
+              vy: (dy / distance) * OCTO_BALL_SPEED,
+              born: nowSeconds,
+            });
+            setOctopusBalls([...octopusBallsRef.current]);
+          }
+        }
+
+        if (columnsChanged) {
+          setOctopusColumns([...octopusColumnsRef.current]);
+        }
+
+        let ballsChanged = false;
+        for (const ball of octopusBallsRef.current) {
+          ball.x += ball.vx * delta;
+          ball.bottom += ball.vy * delta;
+          if (
+            cowXRef.current < ball.x + OCTO_BALL_SIZE / 2 &&
+            cowXRef.current + COW_WIDTH > ball.x - OCTO_BALL_SIZE / 2 &&
+            cowBottomRef.current < ball.bottom + OCTO_BALL_SIZE / 2 &&
+            cowBottomRef.current + COW_HEIGHT > ball.bottom - OCTO_BALL_SIZE / 2
+          ) {
+            takeDamage();
+            ball.born = -1000;
+            ballsChanged = true;
+          }
+        }
+        const activeBalls = octopusBallsRef.current.filter(
+          (ball) =>
+            ball.born > 0 &&
+            nowSeconds - ball.born < 3 &&
+            ball.x > cameraXRef.current - 200 &&
+            ball.x < cameraXRef.current + screenWidth + 200
+        );
+        if (activeBalls.length !== octopusBallsRef.current.length || ballsChanged) {
+          octopusBallsRef.current = activeBalls;
+          setOctopusBalls([...activeBalls]);
+        }
+      }
+
       // Agua / fosa: cae dentro â†’ Game Over inmediato
       // Meta: tocar la bandera => nivel completado
       if (!gameOverRef.current && !levelCompletedRef.current) {
@@ -3116,9 +3786,16 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
             continue;
           }
           const dx = cowXRef.current - obstacle.x;
+          const rushing =
+            (obstacle.chaseRushUntil ?? 0) > time / 1000;
+          const rushSpeed = CHASE_SPEED * CHASE_RUSH_SPEED_MULTIPLIER;
+          const speed = rushing ? rushSpeed : CHASE_SPEED;
           const cowMoveSign = Math.sign(velocityXRef.current);
-          const desiredFacing: Facing =
-            cowMoveSign > 0
+          const desiredFacing: Facing = rushing
+            ? dx >= 0
+              ? 'right'
+              : 'left'
+            : cowMoveSign > 0
               ? 'right'
               : cowMoveSign < 0
                 ? 'left'
@@ -3135,13 +3812,12 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           );
 
           if (obstacle.airborne === true) {
-            const step = CHASE_SPEED * MONSTER_AIR_SPEED_MULTIPLIER * delta;
+            const step = speed * MONSTER_AIR_SPEED_MULTIPLIER * delta;
             obstacle.moving = Math.abs(dx) > step && step > 0;
             if (obstacle.moving) {
               obstacle.x += Math.sign(dx) * step;
             }
-            obstacle.vx =
-              Math.sign(dx) * CHASE_SPEED * MONSTER_AIR_SPEED_MULTIPLIER;
+            obstacle.vx = Math.sign(dx) * speed * MONSTER_AIR_SPEED_MULTIPLIER;
             obstacle.bottom += (obstacle.vy ?? 0) * delta;
             obstacle.vy = (obstacle.vy ?? 0) - GRAVITY * delta;
             if (obstacle.bottom <= groundBob) {
@@ -3150,11 +3826,11 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
               obstacle.airborne = false;
             }
           } else {
-            const step = CHASE_SPEED * delta;
+            const step = speed * delta;
             obstacle.moving = Math.abs(dx) > step && step > 0;
             if (obstacle.moving) {
               obstacle.x += Math.sign(dx) * step;
-              obstacle.vx = Math.sign(dx) * CHASE_SPEED;
+              obstacle.vx = Math.sign(dx) * speed;
             } else {
               obstacle.vx = 0;
             }
@@ -3338,7 +4014,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         return;
       }
 
-      if (isGroundedRef.current) {
+      if (!isUnderwater && isGroundedRef.current) {
         const overOpenHole = isOverOpenHole(
           cowXRef.current,
           obstaclesRef.current
@@ -3369,7 +4045,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         }
       }
 
-      if (!isGroundedRef.current) {
+      if (!isUnderwater && !isGroundedRef.current) {
         if (velocityYRef.current === 0) {
           velocityYRef.current = -1;
         }
@@ -3576,7 +4252,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         }
 
         const baseSpeed = obstacle.speed ?? ENEMY_SPEED;
-        if (!obstacle.vx) {
+        if (obstacle.vx === undefined) {
           obstacle.vx = obstacle.facing === 'left' ? -baseSpeed : baseSpeed;
         }
 
@@ -3590,6 +4266,9 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         // LÃ³gica de patrullaje independiente basada en coordenadas fijas de inicio y rango
         const minX = obstacle.startX - obstacle.range;
         const maxX = obstacle.startX + obstacle.range;
+
+        const isArenaBoss =
+          obstacle.isBoss === true || obstacle.bossConfig !== undefined;
 
         // Movimiento horizontal con colisiÃ³n sÃ³lida contra plataformas.
         // El monstruo no puede atravesar cajas ni plataformas: rebota al chocar.
@@ -3635,7 +4314,9 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           obstacle.vx = Math.abs(obstacle.vx);
         }
 
-        obstacle.facing = obstacle.vx < 0 ? 'left' : 'right';
+        if (Math.abs(obstacle.vx ?? 0) > 1) {
+          obstacle.facing = obstacle.vx < 0 ? 'left' : 'right';
+        }
         if (obstacle.bossConfig) {
           obstacle.bossConfig.vx = obstacle.vx;
         }
@@ -3699,7 +4380,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
         const rising = (obstacle.vy ?? 0) > 0;
         const landOnSurface = (surface: number) => {
-          if (obstacle.airborne === true) {
+          if (obstacle.airborne === true && !isArenaBoss) {
             spawnSlimeTrail(
               obstacle.facing === 'right'
                 ? obstacle.x - SLIME_WIDTH + 6
@@ -3951,6 +4632,9 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
         const remainingBullets: Bullet[] = [];
         for (const bullet of bulletsRef.current) {
+          if (Math.abs(bullet.x - bullet.originX) > BULLET_MAX_RANGE) {
+            continue;
+          }
           const bulletRect: Rect = {
             x: bullet.dir === 'right' ? bullet.x : bullet.x - bullet.width,
             bottom: bullet.y - BULLET_RADIUS,
@@ -3958,82 +4642,10 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
             height: BULLET_RADIUS * 2,
           };
 
-          // --- DaÃ±o exclusivo a distancia contra el Boss ---
-          // Contacto fÃ­sico del jugador con el Boss causa Game Over (no daÃ±o al Boss).
-          // El Boss solo recibe daÃ±o por impacto de bala.
-          let hitBoss: Obstacle | null = null;
-          for (const obstacle of obstaclesRef.current) {
-            if (!(obstacle.isBoss || obstacle.bossConfig)) {
-              continue;
-            }
-            if (
-              bullet.x >= obstacle.x &&
-              bullet.x <= obstacle.x + obstacle.width &&
-              bullet.y >= obstacle.bottom &&
-              bullet.y <= obstacle.bottom + obstacle.height
-            ) {
-              hitBoss = obstacle;
-              break;
-            }
-          }
-
-          if (hitBoss) {
-            const now = performance.now() / 1000;
-            const bossHp = (hitBoss.health ?? 1) - (weapon.damage ?? 1);
-
-            // Registrar tiempo de impacto para efecto visual de destello
-            const idx = obstaclesRef.current.findIndex(
-              (o) => o.id === hitBoss.id
-            );
-            if (idx !== -1) {
-              obstaclesRef.current[idx].lastHitTime = now;
-            }
-
-            // Spawn effect at position
-            deathEffectIdRef.current += 1;
-            deathEffectsRef.current.push({
-              id: deathEffectIdRef.current,
-              x: hitBoss.x + hitBoss.width / 2,
-              y: hitBoss.bottom + hitBoss.height / 2,
-              born: now,
-            });
-
-            if (bossHp <= 0) {
-              // El Boss es eliminado del mapa
-              obstaclesRef.current = obstaclesRef.current.filter(
-                (o) => o.id !== hitBoss.id
-              );
-              setObstacles([...obstaclesRef.current]);
-
-              const coinReward = 25;
-              const scoreReward = 15;
-              const coinsToSpawn = 5;
-              for (let c = 0; c < coinsToSpawn; c++) {
-                floatingCoinsRef.current.push({
-                  id: Date.now() + c,
-                  x: hitBoss.x + hitBoss.width / 2 + (c - 2) * 12,
-                  y: hitBoss.bottom + hitBoss.height / 2 + (c % 2) * 15,
-                  born: now,
-                });
-              }
-              setFloatingCoins([...floatingCoinsRef.current]);
-
-              scoreRef.current += scoreReward;
-              setScore(scoreRef.current);
-              coinsRefCount.current += coinReward;
-              setCoins(coinsRefCount.current);
-            } else {
-              if (idx !== -1) {
-                obstaclesRef.current[idx].health = bossHp;
-                setObstacles([...obstaclesRef.current]);
-              }
-            }
-            // Remover la bala que impactÃ³ al Boss; no sigue viaje
-            continue;
-          }
-
           let hitEnemy: Obstacle | null = null;
           let hitSolid: Obstacle | null = null;
+          let nearestEnemyDistance = Infinity;
+          let nearestSolidDistance = Infinity;
 
           for (const obstacle of obstaclesRef.current) {
             if (
@@ -4061,7 +4673,10 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
             ) {
               continue;
             }
+            const isBossObstacle =
+              obstacle.isBoss === true || obstacle.bossConfig !== undefined;
             const usesSpriteHitbox =
+              isBossObstacle ||
               obstacle.type === 'enemy' ||
               obstacle.type === 'piranha' ||
               obstacle.type === 'bat' ||
@@ -4086,7 +4701,11 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
                     }
                   : spriteRect;
             if (aabbOverlap(bulletRect, checkRect)) {
+              const distance = Math.abs(
+                checkRect.x + checkRect.width / 2 - bulletRect.x
+              );
               if (
+                isBossObstacle ||
                 obstacle.type === 'enemy' ||
                 obstacle.type === 'piranha' ||
                 obstacle.type === 'bat' ||
@@ -4094,9 +4713,12 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
                 obstacle.type === 'destructible' ||
                 obstacle.type === 'moving'
               ) {
-                hitEnemy = obstacle;
-                break;
-              } else if (!hitSolid) {
+                if (distance < nearestEnemyDistance) {
+                  nearestEnemyDistance = distance;
+                  hitEnemy = obstacle;
+                }
+              } else if (distance < nearestSolidDistance) {
+                nearestSolidDistance = distance;
                 hitSolid = obstacle;
               }
             }
@@ -4105,7 +4727,11 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           const hitObstacle = hitEnemy || hitSolid;
 
           if (hitObstacle) {
+            const hitBossObstacle =
+              hitObstacle.isBoss === true ||
+              hitObstacle.bossConfig !== undefined;
             const isDestroyable =
+              hitBossObstacle ||
               hitObstacle.type === 'enemy' ||
               hitObstacle.type === 'piranha' ||
               hitObstacle.type === 'bat' ||
@@ -4132,6 +4758,10 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
               );
               if (idx !== -1) {
                 obstaclesRef.current[idx].lastHitTime = now;
+                if (hitObstacle.type === 'chase_monster') {
+                  obstaclesRef.current[idx].chaseRushUntil =
+                    now + CHASE_RUSH_DURATION_SECONDS;
+                }
                 if (
                   hitObstacle.type === 'enemy' &&
                   !hitObstacle.isBoss &&
@@ -4659,6 +5289,12 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
       return;
     }
 
+    if (levelRef.current >= 3) {
+      upHeldRef.current = true;
+      requestStart();
+      return;
+    }
+
     if (isGroundedRef.current) {
       velocityYRef.current = JUMP_SPEED;
       isGroundedRef.current = false;
@@ -4669,6 +5305,28 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     }
     requestStart();
   }, [requestStart]);
+
+  const handleJumpPressOut = useCallback(() => {
+    upHeldRef.current = false;
+  }, []);
+
+  const handleDownPressIn = useCallback(() => {
+    if (
+      gameOverRef.current ||
+      portalAbsorbRef.current ||
+      levelRef.current < 3
+    ) {
+      return;
+    }
+    downHeldRef.current = true;
+    setIsDiving(true);
+    requestStart();
+  }, [requestStart]);
+
+  const handleDownPressOut = useCallback(() => {
+    downHeldRef.current = false;
+    setIsDiving(false);
+  }, []);
 
   const handleDropPressIn = useCallback(() => {
     if (
@@ -4771,9 +5429,11 @@ let muzzleX: number;
           : 0;
 
       bulletIdRef.current += 1;
+      const bulletX = muzzleX + spreadOffset * 50;
       const bullet: Bullet = {
         id: bulletIdRef.current,
-        x: muzzleX + spreadOffset * 50,
+        x: bulletX,
+        originX: bulletX,
         y: muzzleY + spreadOffset * 20,
         dir: facing,
         vx: facing === 'right' ? weapon.speed : -weapon.speed,
@@ -4824,7 +5484,11 @@ let muzzleX: number;
         case 's':
         case 'S':
           event.preventDefault();
-          handleDropPressIn();
+          if (levelRef.current >= 3) {
+            handleDownPressIn();
+          } else {
+            handleDropPressIn();
+          }
           break;
         case 'f':
         case 'F':
@@ -4846,6 +5510,17 @@ let muzzleX: number;
         case 'D':
           handleRightPressOut();
           break;
+        case ' ':
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          handleJumpPressOut();
+          break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          handleDownPressOut();
+          break;
       }
     };
 
@@ -4856,7 +5531,7 @@ let muzzleX: number;
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleLeftPressIn, handleLeftPressOut, handleRightPressIn, handleRightPressOut, handleJumpPressIn, handleDropPressIn, handleShootPressIn]);
+  }, [handleLeftPressIn, handleLeftPressOut, handleRightPressIn, handleRightPressOut, handleJumpPressIn, handleJumpPressOut, handleDownPressIn, handleDownPressOut, handleDropPressIn, handleShootPressIn]);
 
   const restart = useCallback(() => {
     const beforeLevel = carriedProgress ?? {
@@ -4873,7 +5548,11 @@ let muzzleX: number;
     const initialCoins = createLevelCoins(levelId);
 
     cowXRef.current = PLAYER_START_X;
-    cowBottomRef.current = GROUND_HEIGHT;
+    cowBottomRef.current =
+      levelId >= 3 ? UNDERWATER_START_BOTTOM : GROUND_HEIGHT;
+    underwaterBottomRef.current = cowBottomRef.current;
+    downHeldRef.current = false;
+    upHeldRef.current = false;
     platformExitRef.current = null;
     cameraXRef.current = 0;
     velocityXRef.current = 0;
@@ -4933,6 +5612,21 @@ let muzzleX: number;
     setPowerOrb(null);
     cowEmpoweredRef.current = false;
     setCowEmpowered(false);
+    setIsDiving(false);
+    urchinsRef.current = [];
+    setUrchins([]);
+    urchinWarningRef.current = null;
+    setUrchinWarning(null);
+    urchinWarningUntilRef.current = 0;
+    urchinWaveUntilRef.current = 0;
+    nextUrchinSpawnAtRef.current = 0;
+    nextUrchinEventAtRef.current = performance.now() / 1000 + randomBetween(2, 5);
+    urchinIdRef.current = 0;
+    octopusColumnsRef.current = createOctopusColumns();
+    setOctopusColumns([...octopusColumnsRef.current]);
+    octopusBallsRef.current = [];
+    setOctopusBalls([]);
+    octopusBallIdRef.current = 0;
     setObstacles(initialObstacles);
     setTerrain(initialTerrain);
     setBullets([]);
@@ -4942,11 +5636,11 @@ let muzzleX: number;
     setMuzzleFlashBorn(0);
     setView({
       cowScreenX: PLAYER_START_X,
-      cowBottom: GROUND_HEIGHT,
+      cowBottom: cowBottomRef.current,
       cameraX: 0,
       now: performance.now() / 1000,
       isMoving: false,
-      isGrounded: true,
+      isGrounded: levelRef.current < 3,
     });
     setFacing('right');
     setScore(0);
@@ -4977,7 +5671,11 @@ let muzzleX: number;
     const initialCoins = createLevelCoins(nextLevelId);
 
     cowXRef.current = PLAYER_START_X;
-    cowBottomRef.current = GROUND_HEIGHT;
+    cowBottomRef.current =
+      nextLevelId >= 3 ? UNDERWATER_START_BOTTOM : GROUND_HEIGHT;
+    underwaterBottomRef.current = cowBottomRef.current;
+    downHeldRef.current = false;
+    upHeldRef.current = false;
     platformExitRef.current = null;
     cameraXRef.current = 0;
     velocityXRef.current = 0;
@@ -5035,6 +5733,21 @@ let muzzleX: number;
     setPowerOrb(null);
     cowEmpoweredRef.current = false;
     setCowEmpowered(false);
+    setIsDiving(false);
+    urchinsRef.current = [];
+    setUrchins([]);
+    urchinWarningRef.current = null;
+    setUrchinWarning(null);
+    urchinWarningUntilRef.current = 0;
+    urchinWaveUntilRef.current = 0;
+    nextUrchinSpawnAtRef.current = 0;
+    nextUrchinEventAtRef.current = performance.now() / 1000 + randomBetween(2, 5);
+    urchinIdRef.current = 0;
+    octopusColumnsRef.current = createOctopusColumns();
+    setOctopusColumns([...octopusColumnsRef.current]);
+    octopusBallsRef.current = [];
+    setOctopusBalls([]);
+    octopusBallIdRef.current = 0;
     setObstacles(initialObstacles);
     setTerrain(initialTerrain);
     setBullets([]);
@@ -5044,11 +5757,11 @@ let muzzleX: number;
     setMuzzleFlashBorn(0);
     setView({
       cowScreenX: PLAYER_START_X,
-      cowBottom: GROUND_HEIGHT,
+      cowBottom: cowBottomRef.current,
       cameraX: 0,
       now: performance.now() / 1000,
       isMoving: false,
-      isGrounded: true,
+      isGrounded: levelRef.current < 3,
     });
     setFacing('right');
     setScore(0);
@@ -5146,7 +5859,12 @@ let muzzleX: number;
             ? IMG_COW_WALK_2
             : IMG_COW_IDLE;
 
-  const backgroundImage = currentLevel >= 2 ? IMG_BG_LEVEL_2 : IMG_BG_LEVEL_1;
+  const backgroundImage =
+    currentLevel >= 3
+      ? IMG_BG_LEVEL_3
+      : currentLevel === 2
+        ? IMG_BG_LEVEL_2
+        : IMG_BG_LEVEL_1;
 
   // Animación de absorción: la vaquita se encoge y se desvanece hacia el portal.
   const absorbProgress = portalAbsorb
@@ -5219,6 +5937,25 @@ let muzzleX: number;
     };
   })();
 
+  // Arma sobre el sprite de sirena: se coloca en la mano levantada igual que en
+  // los niveles 1 y 2, usando el recorte real del PNG del arma.
+  const mermaidWeapon = (() => {
+    if (currentLevel < 3 || currentWeapon === 0 || cowDead) {
+      return null;
+    }
+    const weapon = WEAPONS[currentWeapon];
+    const gunScale = 40 / weapon.trim.width;
+    const gripX = (weapon.trim.x + weapon.trim.width * 0.16) * gunScale;
+    const gripY = (weapon.trim.y + weapon.trim.height * 0.8) * gunScale;
+    return {
+      source: weapon.sprite,
+      width: weapon.canvasWidth * gunScale,
+      height: weapon.canvasHeight * gunScale,
+      left: 100 - gripX,
+      top: 43 - gripY,
+    };
+  })();
+
   // Boca del cañón (desde la esquina superior izquierda de la caja de la vaquita).
   const muzzleLocalX = cowWeapon ? cowWeapon.muzzleLocal.x : COW_WIDTH + 8;
   const muzzleLocalYFromTop = cowWeapon
@@ -5280,29 +6017,17 @@ let muzzleX: number;
       {/* El suelo se dibuja antes que el agua y los obstáculos para que el
           lago pueda ocupar visualmente todo el piso. El nivel 2 usa una
           paleta oscura acorde a su fondo. */}
-      <View style={[styles.ground, currentLevel >= 2 && styles.groundNight]}>
-        <View style={styles.stoneRow}>
-          {Array.from({ length: 8 }).map((_, index) => (
-            <View
-              key={index}
-              style={[styles.stoneBlock, currentLevel >= 2 && styles.stoneBlockNight]}
-            />
-          ))}
-        </View>
-        <View style={[styles.grass, currentLevel >= 2 && styles.grassNight]}>
-          <View
-            style={[
-              styles.grassHighlight,
-              currentLevel >= 2 && styles.grassHighlightNight,
-            ]}
-          />
-          <View style={styles.grassTufts}>
-            {Array.from({ length: 16 }).map((_, index) => (
-              <View key={index} style={styles.grassTufts} />
-            ))}
-          </View>
-        </View>
-        {currentLevel >= 2 && <View style={styles.groundFog} />}
+      <View
+        style={[
+          styles.ground,
+          currentLevel === 2 && styles.groundNight,
+          currentLevel >= 3 && styles.groundUnderwater,
+        ]}
+      >
+        <GroundSurface
+          isNight={currentLevel === 2}
+          isUnderwater={currentLevel >= 3}
+        />
       </View>
 
       {visibleObstacles.map((obstacle) => {
@@ -5357,6 +6082,11 @@ let muzzleX: number;
                 obstacle={obstacle}
                 left={left}
                 cowScreenX={view.cowScreenX}
+                bossSpeed={Math.abs(obstacle.vx ?? 0)}
+                bossMoving={
+                  obstacle.hitFlash !== true && Math.abs(obstacle.vx ?? 0) > 1
+                }
+                bossFacing={obstacle.facing ?? 'right'}
               />
             );
           case 'destructible':
@@ -5416,7 +6146,14 @@ let muzzleX: number;
               />
             );
           case 'water':
-            return <WaterZone key={obstacle.id} obstacle={obstacle} left={left} />;
+            return (
+              <WaterZone
+                key={obstacle.id}
+                obstacle={obstacle}
+                left={left}
+                now={view.now}
+              />
+            );
           case 'piranha':
             return <Piranha key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'spike_trap':
@@ -5428,6 +6165,7 @@ let muzzleX: number;
                 obstacle={obstacle}
                 left={left}
                 now={view.now}
+                level={currentLevel}
               />
             );
           case 'goal':
@@ -5452,6 +6190,163 @@ let muzzleX: number;
           <View style={styles.bulletTrail} />
         </View>
       ))}
+
+      {currentLevel >= 3 && urchinWarning !== null && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: Number(urchinWarning - view.cameraX - 70),
+            bottom: SCREEN_HEIGHT - 160,
+            width: 140,
+            height: 78,
+            zIndex: 8,
+            opacity: 0.55 + Math.sin(view.now * 10) * 0.35,
+          }}
+        >
+          <Image
+            source={IMG_URCHIN_WARNING}
+            style={{
+              position: 'absolute',
+              left: -344 * (140 / 684),
+              bottom: -(768 - 572) * (140 / 684),
+              width: 1376 * (140 / 684),
+              height: 768 * (140 / 684),
+            }}
+            resizeMode="stretch"
+            fadeDuration={0}
+            accessible={false}
+          />
+        </View>
+      )}
+
+      {currentLevel >= 3 &&
+        urchins.map((urchin) => {
+          const frameIndex =
+            Math.floor((view.now + urchin.id * 0.05) / URCHIN_FRAME_SECONDS) %
+            URCHIN_FRAMES.length;
+          return (
+            <View
+              key={urchin.id}
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: Number(
+                  urchin.x - view.cameraX - URCHIN_VISIBLE_SIZE / 2
+                ),
+                bottom: Number(urchin.bottom - URCHIN_VISIBLE_SIZE / 2),
+                width: URCHIN_VISIBLE_SIZE,
+                height: URCHIN_VISIBLE_SIZE,
+                zIndex: 8,
+              }}
+            >
+              <Image
+                source={URCHIN_FRAMES[frameIndex].source}
+                style={urchinFrameStyle(URCHIN_FRAMES[frameIndex])}
+                resizeMode="stretch"
+                fadeDuration={0}
+                accessible={false}
+              />
+            </View>
+          );
+        })}
+
+      {currentLevel >= 3 &&
+        octopusColumns.map((column) => {
+          const attacking = view.now < column.attackUntil;
+          const spriteIndex = attacking
+            ? 2
+            : Math.floor(view.now / OCTO_ANIM_SECONDS) % 2;
+          const source = OCTO_SPRITES[column.variant][spriteIndex];
+          const imageLeft = (OCTO_COLUMN_WIDTH - 1376) / 2;
+          return (
+            <React.Fragment key={`octo-${column.id}`}>
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: Number(
+                    column.x - view.cameraX - OCTO_COLUMN_WIDTH / 2
+                  ),
+                  bottom: OCTO_GAP_CENTER + OCTO_GAP_HEIGHT / 2,
+                  width: OCTO_COLUMN_WIDTH,
+                  height: OCTO_PIECE_HEIGHT,
+                  overflow: 'hidden',
+                  zIndex: 3,
+                }}
+              >
+                <Image
+                  source={source}
+                  style={{
+                    position: 'absolute',
+                    left: imageLeft,
+                    bottom:
+                      -(768 - OCTO_PIECE_BOTTOM_Y[column.variant][spriteIndex]),
+                    width: 1376,
+                    height: 768,
+                  }}
+                  resizeMode="contain"
+                  fadeDuration={0}
+                  accessible={false}
+                />
+              </View>
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: Number(
+                    column.x - view.cameraX - OCTO_COLUMN_WIDTH / 2
+                  ),
+                  bottom: GROUND_HEIGHT,
+                  width: OCTO_COLUMN_WIDTH,
+                  height: OCTO_PIECE_HEIGHT,
+                  overflow: 'hidden',
+                  zIndex: 3,
+                }}
+              >
+                <Image
+                  source={source}
+                  style={{
+                    position: 'absolute',
+                    left: imageLeft,
+                    bottom:
+                      -(
+                        768 -
+                        OCTO_BOTTOM_PIECE_BOTTOM_Y[column.variant][spriteIndex]
+                      ),
+                    width: 1376,
+                    height: 768,
+                  }}
+                  resizeMode="contain"
+                  fadeDuration={0}
+                  accessible={false}
+                />
+              </View>
+            </React.Fragment>
+          );
+        })}
+
+      {currentLevel >= 3 &&
+        octopusBalls.map((ball) => (
+          <View
+            key={`octoball-${ball.id}`}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: Number(ball.x - view.cameraX - OCTO_BALL_SIZE / 2),
+              bottom: Number(ball.bottom - OCTO_BALL_SIZE / 2),
+              width: OCTO_BALL_SIZE,
+              height: OCTO_BALL_SIZE,
+              borderRadius: OCTO_BALL_SIZE / 2,
+              backgroundColor: '#08080d',
+              shadowColor: '#000',
+              shadowOpacity: 0.8,
+              shadowRadius: 8,
+              elevation: 8,
+              zIndex: 9,
+            }}
+          />
+        ))}
 
       {visibleFireballs.map((fireball) => (
         <View
@@ -5536,7 +6431,7 @@ let muzzleX: number;
         );
       })}
 
-      {view.now - muzzleFlashBorn < 0.12 && (
+      {currentLevel < 3 && view.now - muzzleFlashBorn < 0.12 && (
         <View
           style={[
             styles.muzzleFlash,
@@ -5554,24 +6449,44 @@ let muzzleX: number;
         />
       )}
 
-      <Cow
-        facing={facing}
-        width={cowRenderWidth}
-        height={cowRenderHeight}
-        isMoving={view.isMoving}
-        isJumping={!view.isGrounded}
-        spriteSource={cowSprite}
-        resizeMode={cowDead ? 'cover' : 'contain'}
-        weapon={cowDead ? null : cowWeapon}
-        style={[
-          styles.cow,
-          {
-            left: Number(cowRenderLeft),
-            bottom: Number(cowRenderBottom),
-            opacity: (1 - absorbEase) * cowBlinkOpacity,
-          },
-        ]}
-      />
+      {currentLevel >= 3 ? (
+        <MermaidCow
+          facing={facing}
+          isMoving={view.isMoving}
+          isShooting={isShooting}
+          upgradedWeapon={currentWeapon > 0}
+          weapon={isShooting ? mermaidWeapon : null}
+          diving={isDiving}
+          now={view.now}
+          style={[
+            styles.cow,
+            {
+              left: Number(cowRenderLeft + (cowRenderWidth - 140) / 2),
+              bottom: Number(cowRenderBottom + (cowRenderHeight - 110) / 2),
+              opacity: (1 - absorbEase) * cowBlinkOpacity,
+            },
+          ]}
+        />
+      ) : (
+        <Cow
+          facing={facing}
+          width={cowRenderWidth}
+          height={cowRenderHeight}
+          isMoving={view.isMoving}
+          isJumping={!view.isGrounded}
+          spriteSource={cowSprite}
+          resizeMode={cowDead ? 'cover' : 'contain'}
+          weapon={cowDead ? null : cowWeapon}
+          style={[
+            styles.cow,
+            {
+              left: Number(cowRenderLeft),
+              bottom: Number(cowRenderBottom),
+              opacity: (1 - absorbEase) * cowBlinkOpacity,
+            },
+          ]}
+        />
+      )}
 
       {/* El lodo se pinta después de la vaquita para que la tape al hundirse. */}
       {visibleObstacles
@@ -5633,6 +6548,10 @@ let muzzleX: number;
         onRightPressIn={handleRightPressIn}
         onRightPressOut={handleRightPressOut}
         onJumpPressIn={handleJumpPressIn}
+        onJumpPressOut={handleJumpPressOut}
+        onDownPressIn={handleDownPressIn}
+        onDownPressOut={handleDownPressOut}
+        showDown={currentLevel >= 3}
         onShootPressIn={handleShootPressIn}
       />
 
@@ -6165,6 +7084,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2b2530',
     borderTopColor: '#16121b',
   },
+  groundUnderwater: {
+    backgroundColor: '#0d3a4d',
+    borderTopColor: '#082736',
+  },
   groundFog: {
     position: 'absolute',
     top: 2,
@@ -6222,6 +7145,52 @@ const styles = StyleSheet.create({
   },
   grassHighlightNight: {
     backgroundColor: 'rgba(196, 170, 214, 0.14)',
+  },
+  groundEdgeLight: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 2,
+  },
+  groundEdgeShade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 17,
+    height: 5,
+  },
+  groundTileInner: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    top: 2,
+    bottom: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  groundSpeck: {
+    position: 'absolute',
+    borderRadius: 1,
+  },
+  groundBevel: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    bottom: 2,
+    height: 2,
+  },
+  groundBevelTop: {
+    position: 'absolute',
+    left: 3,
+    right: 3,
+    top: 1,
+    height: 2,
+  },
+  groundCrack: {
+    position: 'absolute',
+    width: 1.5,
+    borderRadius: 1,
   },
   bullet: {
     position: 'absolute',
@@ -6879,7 +7848,7 @@ const styles = StyleSheet.create({
   },
   waterZone: {
     position: 'absolute',
-    overflow: 'hidden',
+    backgroundColor: 'transparent',
   },
   waterImg: {
     width: '100%',
