@@ -3,6 +3,7 @@ import {
   Animated,
   Image,
   ImageSourcePropType,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -43,10 +44,12 @@ import {
   MUD_TRAP_SINK_DURATION,
   MudTrapZone,
 } from '../components/organisms/MudTrapZone';
-import { COLORS, SCREEN_HEIGHT, SCREEN_WIDTH } from '../constants/theme';
-
-const FALLBACK_SCREEN_WIDTH = 360;
-const FALLBACK_SCREEN_HEIGHT = 640;
+import {
+  COLORS,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
+  useScreenDimensions,
+} from '../constants/theme';
 
 const PLAYER_START_X = 50;
 const GROUND_HEIGHT = 100;
@@ -161,9 +164,30 @@ const MAX_FALL_SPEED = 950;
 const APEX_VELOCITY_THRESHOLD = 100;
 const APEX_GRAVITY_FACTOR = 0.85;
 const MAX_JUMPS = 2;
-const UNDERWATER_START_BOTTOM = GROUND_HEIGHT + 350;
-const UNDERWATER_MIN_BOTTOM = GROUND_HEIGHT + 24;
-const UNDERWATER_MAX_BOTTOM = SCREEN_HEIGHT - 140;
+const OCTO_GAP_HEIGHT = Math.min(
+  140,
+  Math.max(80, Math.round((SCREEN_HEIGHT - GROUND_HEIGHT) * 0.32))
+);
+const OCTO_SPRITE_HEIGHT = Math.max(
+  60,
+  Math.min(
+    240,
+    Math.round(
+      (SCREEN_HEIGHT - GROUND_HEIGHT - OCTO_GAP_HEIGHT) / 2 - 8
+    )
+  )
+);
+const OCTO_GAP_CENTER =
+  GROUND_HEIGHT + OCTO_SPRITE_HEIGHT + OCTO_GAP_HEIGHT / 2;
+const OCTO_GAP_TOP = OCTO_GAP_CENTER + OCTO_GAP_HEIGHT / 2;
+const OCTO_GAP_BOTTOM = OCTO_GAP_CENTER - OCTO_GAP_HEIGHT / 2;
+const UNDERWATER_START_BOTTOM = OCTO_GAP_CENTER - COW_HEIGHT / 2;
+const UNDERWATER_MIN_BOTTOM =
+  GROUND_HEIGHT + Math.round(OCTO_SPRITE_HEIGHT * 0.3);
+const UNDERWATER_MAX_BOTTOM = Math.max(
+  UNDERWATER_MIN_BOTTOM + COW_HEIGHT,
+  SCREEN_HEIGHT - Math.max(120, COW_HEIGHT * 2)
+);
 const UNDERWATER_VERTICAL_SPEED = 230;
 const URCHIN_WARNING_SECONDS = 2;
 const URCHIN_WAVE_SECONDS = 3;
@@ -175,13 +199,40 @@ const URCHIN_IMAGE_WIDTH = 1376;
 const URCHIN_IMAGE_HEIGHT = 768;
 const URCHIN_LIFETIME_SECONDS = 3;
 const OCTO_COLUMN_WIDTH = 250;
-const OCTO_GAP_CENTER = UNDERWATER_START_BOTTOM;
-const OCTO_GAP_HEIGHT = 140;
-const OCTO_PIECE_HEIGHT = 240;
+const OCTO_GAP_TOLERANCE = 4;
+const OCTO_SPRITE_WIDTH = 170;
+const OCTO_LOWER_VISUAL_TOP = GROUND_HEIGHT + OCTO_SPRITE_HEIGHT;
+const OCTO_HITBOX_HALF_WIDTH = OCTO_SPRITE_WIDTH / 2;
+const OCTO_CANVAS_WIDTH = 1376;
+const OCTO_CANVAS_HEIGHT = 768;
 const OCTO_ANIM_SECONDS = 0.5;
 const OCTO_ATTACK_SECONDS = 0.7;
 const OCTO_BALL_SPEED = 420;
 const OCTO_BALL_SIZE = 26;
+const OCTO_BALL_HITBOX = 14;
+const OCTO_BALL_ARM_DELAY_SECONDS = 0.12;
+const OCTO_SHOT_COOLDOWN_SECONDS = 2;
+const OCTO_BALL_SPAWN_OFFSET = 24;
+const OCTO_BALL_LIFETIME_SECONDS = 1.8;
+const OCTO_MAX_ACTIVE_BALLS = 4;
+const DRAGON_TRIGGER_X = 3060;
+const DRAGON_MAX_X = 3300;
+const DRAGON_BOX_HEIGHT = Math.min(
+  360,
+  Math.max(200, SCREEN_HEIGHT - 56)
+);
+const DRAGON_BOX_WIDTH = Math.min(
+  360,
+  Math.round(DRAGON_BOX_HEIGHT * 1.1)
+);
+const DRAGON_HEALTH = 60;
+const DRAGON_DIVE_FRAME_SECONDS = 0.25;
+const DRAGON_NEXT_DIVE_MIN_SECONDS = 1.8;
+const DRAGON_NEXT_DIVE_MAX_SECONDS = 3.4;
+const DRAGON_EMERGE_SECONDS = 0.6;
+const DRAGON_ADVANCE_FRAME_SECONDS = 0.18;
+const DRAGON_ADVANCE_SPEED = 100;
+const DRAGON_VERTICAL_SPEED = 130;
 const MAX_LIVES = 3;
 const INVULNERABILITY_MS = 1300;
 const DAMAGE_FRAME_GUARD_MS = 16;
@@ -204,6 +255,7 @@ const BOSS_WIDTH = 135;
 const BOSS_HEIGHT = 135;
 const BOSS_ARENA_START_X = 2400;
 const BOSS_ARENA_RANGE = 700;
+const BOSS_TELEPORT_VANISH_SECONDS = 0.28;
 const ENEMY_SPEED = 62;
 const ENEMY_HP = 3;
 const ENEMY_JUMP_SPEED = 780;
@@ -304,7 +356,8 @@ const HOLE_IMAGE_CONTENT_HEIGHT = 220;
 const HOLE_TRAP_WIDTH = 130;
 const HOLE_TRAP_HEIGHT = GROUND_HEIGHT;
 const HOLE_OPEN_DURATION = 0.28;
-const HOLE_DEATH_BOTTOM = GROUND_HEIGHT - 140;
+const HOLE_DEATH_BOTTOM = GROUND_HEIGHT - 70;
+const HOLE_DEATH_DELAY_SECONDS = 0.5;
 const IMG_SPIKES = require('../../assets/obstaculos/obstacle-spikes.png');
 const IMG_BENCH = require('../../assets/obstaculos/obstacle-bench.png');
 const IMG_STONE_TRAP = require('../../assets/obstaculos/obstacle-stone_trampa.png');
@@ -346,10 +399,93 @@ const IMG_ESCALERAS = [
   require('../../assets/obstaculos/escalera3.png'),
   require('../../assets/obstaculos/escalera4.png'),
 ];
+const IMG_ESCALERA1_TRAMPA = require('../../assets/obstaculos/escalera1_trampa.png');
+const IMG_ESCALERA4_TRAMPA = require('../../assets/obstaculos/escalera4_trampa.png');
 const IMG_PISO_FLOTANTE = require('../../assets/obstaculos/pisoflotante.png');
 const IMG_ESPINAS = require('../../assets/obstaculos/espinas.png');
 const IMG_ESCALERA_ASPECTS = [398 / 206, 387 / 227, 355 / 235, 249 / 213];
 const IMG_ESCALERA_SURFACES = [0.46, 0.38, 0.4, 0.4];
+
+interface LadderContentRect {
+  canvasWidth: number;
+  canvasHeight: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+const LADDER_TRAP_CONTENT: Record<
+  0 | 3,
+  { original: LadderContentRect; trap: LadderContentRect }
+> = {
+  0: {
+    original: {
+      canvasWidth: 398,
+      canvasHeight: 206,
+      left: 58,
+      right: 247,
+      top: 12,
+      bottom: 191,
+    },
+    trap: {
+      canvasWidth: 543,
+      canvasHeight: 315,
+      left: 198,
+      right: 388,
+      top: 88,
+      bottom: 314,
+    },
+  },
+  3: {
+    original: {
+      canvasWidth: 249,
+      canvasHeight: 213,
+      left: 10,
+      right: 175,
+      top: 41,
+      bottom: 212,
+    },
+    trap: {
+      canvasWidth: 423,
+      canvasHeight: 230,
+      left: 71,
+      right: 303,
+      top: 30,
+      bottom: 226,
+    },
+  },
+};
+
+const getTrapSpriteLayout = (
+  content: { original: LadderContentRect; trap: LadderContentRect },
+  width: number,
+  height: number
+) => {
+  const fit = Math.min(
+    width / content.original.canvasWidth,
+    height / content.original.canvasHeight
+  );
+  const footprintWidth =
+    (content.original.right - content.original.left + 1) * fit;
+  const footprintHeight =
+    (content.original.bottom - content.original.top + 1) * fit;
+  const scaleX = footprintWidth / (content.trap.right - content.trap.left + 1);
+  const scaleY =
+    footprintHeight / (content.trap.bottom - content.trap.top + 1);
+  return {
+    left: (width - content.original.canvasWidth * fit) / 2 + content.original.left * fit,
+    bottom:
+      (height - content.original.canvasHeight * fit) / 2 +
+      (content.original.canvasHeight - content.original.bottom) * fit,
+    width: footprintWidth,
+    height: footprintHeight,
+    imageLeft: -content.trap.left * scaleX,
+    imageBottom: -(content.trap.canvasHeight - content.trap.bottom) * scaleY,
+    imageWidth: content.trap.canvasWidth * scaleX,
+    imageHeight: content.trap.canvasHeight * scaleY,
+  };
+};
 
 // Portal entre niveles y fondos por nivel
 const IMG_PORTAL_1 = require('../../assets/otros/portal_movimiento1.png');
@@ -381,16 +517,146 @@ const OCTO_SPRITES = [
     require('../../assets/monstruos/pulpos3_ataque.png'),
   ],
 ];
-const OCTO_PIECE_BOTTOM_Y = [
-  [271, 307, 301],
-  [265, 295, 379],
-  [263, 297, 343],
+interface OctoContentRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+interface OctoSpriteContent {
+  upper: OctoContentRect;
+  lower: OctoContentRect;
+}
+
+const OCTO_CONTENT: OctoSpriteContent[][] = [
+  [
+    {
+      upper: { left: 627, right: 743, top: 73, bottom: 271 },
+      lower: { left: 627, right: 748, top: 351, bottom: 573 },
+    },
+    {
+      upper: { left: 623, right: 753, top: 136, bottom: 310 },
+      lower: { left: 622, right: 744, top: 410, bottom: 631 },
+    },
+    {
+      upper: { left: 632, right: 766, top: 76, bottom: 302 },
+      lower: { left: 615, right: 814, top: 394, bottom: 631 },
+    },
+  ],
+  [
+    {
+      upper: { left: 623, right: 764, top: 38, bottom: 264 },
+      lower: { left: 633, right: 769, top: 352, bottom: 602 },
+    },
+    {
+      upper: { left: 635, right: 791, top: 59, bottom: 295 },
+      lower: { left: 640, right: 813, top: 417, bottom: 706 },
+    },
+    {
+      upper: { left: 644, right: 779, top: 164, bottom: 379 },
+      lower: { left: 613, right: 815, top: 461, bottom: 681 },
+    },
+  ],
+  [
+    {
+      upper: { left: 612, right: 741, top: 76, bottom: 265 },
+      lower: { left: 641, right: 763, top: 406, bottom: 622 },
+    },
+    {
+      upper: { left: 635, right: 780, top: 85, bottom: 299 },
+      lower: { left: 669, right: 806, top: 459, bottom: 703 },
+    },
+    {
+      upper: { left: 623, right: 726, top: 192, bottom: 342 },
+      lower: { left: 637, right: 752, top: 429, bottom: 575 },
+    },
+  ],
 ];
-const OCTO_BOTTOM_PIECE_BOTTOM_Y = [
-  [573, 631, 631],
-  [603, 707, 681],
-  [623, 703, 575],
+
+const getOctoImageStyle = (
+  rect: OctoContentRect,
+  piece: 'upper' | 'lower'
+) => {
+  const scale = OCTO_SPRITE_HEIGHT / (rect.bottom - rect.top + 1);
+  const centerX = (rect.left + rect.right) / 2;
+  return {
+    left: OCTO_COLUMN_WIDTH / 2 - centerX * scale,
+    bottom:
+      piece === 'upper'
+        ? OCTO_SPRITE_HEIGHT - (OCTO_CANVAS_HEIGHT - rect.top) * scale
+        : -(OCTO_CANVAS_HEIGHT - rect.bottom) * scale,
+    width: OCTO_CANVAS_WIDTH * scale,
+    height: OCTO_CANVAS_HEIGHT * scale,
+  };
+};
+
+interface DragonFrame {
+  source: ImageSourcePropType;
+  canvasWidth: number;
+  canvasHeight: number;
+  content: OctoContentRect;
+}
+
+const DRAGON_FRAMES: DragonFrame[] = [
+  {
+    source: require('../../assets/monstruos/dragon_piso1.png'),
+    canvasWidth: 624,
+    canvasHeight: 651,
+    content: { left: 50, right: 527, top: 9, bottom: 622 },
+  },
+  {
+    source: require('../../assets/monstruos/dragon_piso2.png'),
+    canvasWidth: 392,
+    canvasHeight: 311,
+    content: { left: 0, right: 368, top: 1, bottom: 310 },
+  },
+  {
+    source: require('../../assets/monstruos/dragon_piso3.png'),
+    canvasWidth: 477,
+    canvasHeight: 310,
+    content: { left: 0, right: 456, top: 0, bottom: 308 },
+  },
+  {
+    source: require('../../assets/monstruos/dragon_piso4.png'),
+    canvasWidth: 568,
+    canvasHeight: 680,
+    content: { left: 3, right: 539, top: 0, bottom: 634 },
+  },
+  {
+    source: require('../../assets/monstruos/dragon_avanza1.png'),
+    canvasWidth: 432,
+    canvasHeight: 317,
+    content: { left: 103, right: 363, top: 31, bottom: 288 },
+  },
+  {
+    source: require('../../assets/monstruos/dragon_avanza2.png'),
+    canvasWidth: 613,
+    canvasHeight: 350,
+    content: { left: 81, right: 435, top: 0, bottom: 309 },
+  },
+  {
+    source: require('../../assets/monstruos/dragon_avanza3.png'),
+    canvasWidth: 542,
+    canvasHeight: 329,
+    content: { left: 74, right: 441, top: 30, bottom: 303 },
+  },
 ];
+
+const getDragonImageStyle = (frame: DragonFrame) => {
+  const contentWidth = frame.content.right - frame.content.left + 1;
+  const contentHeight = frame.content.bottom - frame.content.top + 1;
+  const scaleX = DRAGON_BOX_WIDTH / contentWidth;
+  const scaleY = DRAGON_BOX_HEIGHT / contentHeight;
+  const centerX = (frame.content.left + frame.content.right) / 2;
+  return {
+    left: DRAGON_BOX_WIDTH / 2 - centerX * scaleX,
+    bottom: -(frame.canvasHeight - frame.content.bottom) * scaleY,
+    width: frame.canvasWidth * scaleX,
+    height: frame.canvasHeight * scaleY,
+  };
+};
+
 const URCHIN_FRAMES = [
   {
     source: require('../../assets/monstruos/erizo1.png'),
@@ -408,13 +674,28 @@ const URCHIN_FRAMES = [
   },
 ];
 
+const OCTO_COLUMN_LAYOUT: { x: number; variant: 0 | 1 | 2 }[] = [
+  { x: 760, variant: 0 },
+  { x: 1200, variant: 2 },
+  { x: 1660, variant: 1 },
+  { x: 2060, variant: 2 },
+  { x: 2540, variant: 0 },
+  { x: 2960, variant: 1 },
+];
+
+const LEVEL3_POWER_ORB_X =
+  (OCTO_COLUMN_LAYOUT[4].x + OCTO_COLUMN_LAYOUT[5].x) / 2;
+const LEVEL3_POWER_ORB_BOTTOM = UNDERWATER_MIN_BOTTOM + 10;
+
 const createOctopusColumns = (): OctopusColumn[] =>
-  [820, 1140, 1340, 1960, 2440, 2680].map((x, index) => ({
+  OCTO_COLUMN_LAYOUT.map(({ x, variant }, index) => ({
     id: index + 1,
     x,
-    variant: (index % 3) as 0 | 1 | 2,
-    triggered: false,
+    variant,
+    nextShotAt: 0,
     attackUntil: 0,
+    solidDamageArmed: true,
+    shotCount: 0,
   }));
 
 const urchinFrameStyle = (
@@ -693,6 +974,7 @@ const UPPER_ROUTE_OBSTACLES: InitialObstacleSpec[] = [
       visualKind: 'escalera' as const,
       visualIndex: index % IMG_ESCALERAS.length,
       collisionInsetX: 18,
+      ladderTrap: index === 0 || index === 3,
     };
   }),
   ...Array.from({ length: UPPER_ROUTE_SEGMENT_COUNT }, (_, index) => ({
@@ -856,8 +1138,16 @@ obstacles: [
     name: 'Nivel 3',
     width: 3600,
     procedural: false,
-    goal: { x: 3200, bottom: GROUND_HEIGHT, width: 60, height: 100 },
-    obstacles: [],
+    obstacles: [
+      {
+        type: 'sea_dragon',
+        x: DRAGON_TRIGGER_X,
+        bottom: GROUND_HEIGHT,
+        width: DRAGON_BOX_WIDTH,
+        height: DRAGON_BOX_HEIGHT,
+        isBoss: true,
+      },
+    ],
   },
 ];
 
@@ -893,6 +1183,7 @@ type ObstacleType =
   | 'floor_spines'
   | 'spines_barrier'
   | 'boss_gate'
+  | 'sea_dragon'
   | 'portal'
   | 'goal';
 
@@ -932,6 +1223,8 @@ interface Obstacle {
   trapArmed?: boolean;
   trapTriggered?: boolean;
   trapTriggerTime?: number;
+  ladderTrap?: boolean;
+  ladderTrapTriggered?: boolean;
   // Visuales calculados en el game loop para que el render sea puro
   hitFlash?: boolean;
   enraged?: boolean;
@@ -972,6 +1265,12 @@ interface Obstacle {
   bossNextActionAt?: number;
   bossLastX?: number;
   bossStuckFor?: number;
+  respawnAt?: number;
+  respawnX?: number;
+  dragonState?: 'hidden' | 'diving' | 'emerging' | 'advancing';
+  dragonFrame?: number;
+  dragonPhaseStartedAt?: number;
+  dragonPhaseUntil?: number;
   spawnedAt?: number;
   batHomeX?: number;
   batHomeBottom?: number;
@@ -1012,8 +1311,10 @@ interface OctopusColumn {
   id: number;
   x: number;
   variant: 0 | 1 | 2;
-  triggered: boolean;
+  nextShotAt: number;
   attackUntil: number;
+  solidDamageArmed: boolean;
+  shotCount: number;
 }
 
 interface OctopusBall {
@@ -1060,6 +1361,7 @@ interface InitialObstacleSpec {
   visualKind?: 'escalera' | 'pisoflotante';
   visualIndex?: number;
   collisionInsetX?: number;
+  ladderTrap?: boolean;
   extraWidth?: number;
   arenaPlatform?: boolean;
   patrolCenterX?: number;
@@ -1087,8 +1389,19 @@ interface ViewState {
   isGrounded: boolean;
 }
 
+interface InputState {
+  left: boolean;
+  right: boolean;
+  down: boolean;
+  fire: boolean;
+  jumpRequested: boolean;
+}
+
 interface GameScreenProps {
   onExit: () => void;
+  onRestartSession?: () => void;
+  initialLevel?: number;
+  onLevelChange?: (level: number) => void;
 }
 
 interface ObstacleViewProps {
@@ -1237,7 +1550,7 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
     const enemyFacing: Facing = Math.random() < 0.5 ? 'left' : 'right';
     const baseBottom = GROUND_HEIGHT;
 
-    if (spec.isBoss) {
+    if (spec.isBoss && spec.type !== 'sea_dragon') {
       const bossHealth = 10;
       const bossSpeed = ENEMY_SPEED * 0.75;
       obstacles.push({
@@ -1387,6 +1700,8 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
           visualIndex: spec.visualIndex,
           collisionInsetX: spec.collisionInsetX,
           arenaPlatform: spec.arenaPlatform,
+          ladderTrap: spec.ladderTrap ?? false,
+          ladderTrapTriggered: false,
         });
         break;
       }
@@ -1487,6 +1802,26 @@ const createInitialObstacles = (levelId: number): Obstacle[] => {
           width: spec.width,
           height: spec.height ?? WATER_HEIGHT,
           scored: false,
+        });
+        break;
+      }
+      case 'sea_dragon': {
+        obstacles.push({
+          id: id++,
+          type: 'sea_dragon',
+          x: spec.x,
+          bottom: spec.bottom ?? GROUND_HEIGHT,
+          width: spec.width,
+          height: spec.height,
+          scored: false,
+          isBoss: true,
+          active: false,
+          health: DRAGON_HEALTH,
+          maxHealth: DRAGON_HEALTH,
+          isDead: false,
+          facing: 'left',
+          dragonState: 'hidden',
+          dragonFrame: 0,
         });
         break;
       }
@@ -1686,7 +2021,7 @@ interface CollisionBody {
 // Una nube trampa ya destruida o la barrera del jefe ya vencida dejan de
 // colisionar y de dibujarse.
 const isVanishedObstacle = (obstacle: Obstacle): boolean =>
-  (obstacle.type === 'cloud_trap' && obstacle.vanished === true) ||
+  obstacle.vanished === true ||
   (obstacle.type === 'boss_gate' && obstacle.active !== true);
 
 const isOverOpenHole = (x: number, obstacles: Obstacle[]): boolean =>
@@ -2257,7 +2592,7 @@ const EnemyObstacle = React.memo(function EnemyObstacle({
             width: obstacle.width,
             height: obstacle.height,
             opacity: isHit ? 0.5 : 1,
-            transform: isHit ? [{ scale: 1.1 }] : undefined,
+            transform: [{ scale: isHit ? 1.1 : 1 }],
           }}
         />
       )}
@@ -2349,6 +2684,14 @@ const UpperRoutePlatform = React.memo(function UpperRoutePlatform({
 }: PlatformViewProps) {
   const isStep = obstacle.visualKind === 'escalera';
   const stepIndex = (obstacle.visualIndex ?? 0) % IMG_ESCALERAS.length;
+  const trapTriggered =
+    obstacle.ladderTrap === true && obstacle.ladderTrapTriggered === true;
+  const trapSource =
+    stepIndex === 0
+      ? IMG_ESCALERA1_TRAMPA
+      : stepIndex === 3
+        ? IMG_ESCALERA4_TRAMPA
+        : IMG_ESCALERAS[stepIndex];
   const aspect = isStep ? IMG_ESCALERA_ASPECTS[stepIndex] : PISO_FLOTANTE_ASPECT;
   const surface = isStep ? IMG_ESCALERA_SURFACES[stepIndex] : PISO_FLOTANTE_SURFACE;
   const drawnHeight = Math.min(obstacle.height, obstacle.width / aspect);
@@ -2359,7 +2702,15 @@ const UpperRoutePlatform = React.memo(function UpperRoutePlatform({
   const arenaImageHeight = obstacle.width / aspect;
   const arenaBottomOffset =
     obstacle.height - arenaImageHeight * (1 - surface);
-  const source = isStep ? IMG_ESCALERAS[stepIndex] : IMG_PISO_FLOTANTE;
+  const source = isStep
+    ? trapTriggered
+      ? trapSource
+      : IMG_ESCALERAS[stepIndex]
+    : IMG_PISO_FLOTANTE;
+  const trapLayout =
+    trapTriggered && (stepIndex === 0 || stepIndex === 3)
+      ? getTrapSpriteLayout(LADDER_TRAP_CONTENT[stepIndex], obstacle.width, obstacle.height)
+      : null;
 
   return (
     <View
@@ -2374,30 +2725,59 @@ const UpperRoutePlatform = React.memo(function UpperRoutePlatform({
         overflow: isArenaPlatform ? 'hidden' : undefined,
       }}
     >
-      <Image
-        source={source}
-        style={
-          isArenaPlatform
-            ? {
-                position: 'absolute',
-                left: 0,
-                bottom: arenaBottomOffset,
-                width: obstacle.width,
-                height: arenaImageHeight,
-              }
-            : {
-                position: 'absolute',
-                left: 0,
-                bottom: 0,
-                width: obstacle.width,
-                height: obstacle.height,
-                transform: [{ translateY: -surfaceShift }],
-              }
-        }
-        resizeMode="contain"
-        fadeDuration={0}
-        accessible={false}
-      />
+      {trapLayout ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: Number(trapLayout.left),
+            bottom: Number(trapLayout.bottom),
+            width: trapLayout.width,
+            height: trapLayout.height,
+            overflow: 'hidden',
+            transform: [{ translateY: -surfaceShift }],
+          }}
+        >
+          <Image
+            source={source}
+            style={{
+              position: 'absolute',
+              left: Number(trapLayout.imageLeft),
+              bottom: Number(trapLayout.imageBottom),
+              width: trapLayout.imageWidth,
+              height: trapLayout.imageHeight,
+            }}
+            resizeMode="stretch"
+            fadeDuration={0}
+            accessible={false}
+          />
+        </View>
+      ) : (
+        <Image
+          source={source}
+          style={
+            isArenaPlatform
+              ? {
+                  position: 'absolute',
+                  left: 0,
+                  bottom: arenaBottomOffset,
+                  width: obstacle.width,
+                  height: arenaImageHeight,
+                }
+              : {
+                  position: 'absolute',
+                  left: 0,
+                  bottom: 0,
+                  width: obstacle.width,
+                  height: obstacle.height,
+                  transform: [{ translateY: -surfaceShift }],
+                }
+          }
+          resizeMode="contain"
+          fadeDuration={0}
+          accessible={false}
+        />
+      )}
     </View>
   );
 });
@@ -2947,16 +3327,23 @@ const GroundSurface = React.memo(function GroundSurface({
   );
 });
 
-export default function GameScreen({ onExit }: GameScreenProps) {  const screenWidth =
-    Number.isFinite(SCREEN_WIDTH) && SCREEN_WIDTH > 0
-      ? SCREEN_WIDTH
-      : FALLBACK_SCREEN_WIDTH;
-  const screenHeight =
-    Number.isFinite(SCREEN_HEIGHT) && SCREEN_HEIGHT > 0
-      ? SCREEN_HEIGHT
-      : FALLBACK_SCREEN_HEIGHT;
+export default function GameScreen({
+  onExit,
+  onRestartSession,
+  initialLevel = 1,
+  onLevelChange,
+}: GameScreenProps) {
+  const { width: screenWidth, height: screenHeight } = useScreenDimensions();
+  const initialCowBottom =
+    initialLevel >= 3 ? UNDERWATER_START_BOTTOM : GROUND_HEIGHT;
+  const initialPowerOrb =
+    initialLevel >= 3
+      ? { x: LEVEL3_POWER_ORB_X, bottom: LEVEL3_POWER_ORB_BOTTOM }
+      : null;
 
-  const [obstacles, setObstacles] = useState<Obstacle[]>(() => createInitialObstacles(1));
+  const [obstacles, setObstacles] = useState<Obstacle[]>(
+    () => createInitialObstacles(initialLevel)
+  );
   const [terrain, setTerrain] = useState<TerrainSegment[]>(createInitialTerrain);
   const [bullets, setBullets] = useState<Bullet[]>([]);
   const [urchins, setUrchins] = useState<Urchin[]>([]);
@@ -2966,14 +3353,16 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   );
   const [octopusBalls, setOctopusBalls] = useState<OctopusBall[]>([]);
   const [floatingCoins, setFloatingCoins] = useState<FloatingCoin[]>([]);
-  const [levelCoins, setLevelCoins] = useState<Coin[]>(() => createLevelCoins(1));
+  const [levelCoins, setLevelCoins] = useState<Coin[]>(
+    () => createLevelCoins(initialLevel)
+  );
   const [view, setView] = useState<ViewState>({
     cowScreenX: PLAYER_START_X,
-    cowBottom: GROUND_HEIGHT,
+    cowBottom: initialCowBottom,
     cameraX: 0,
     now: 0,
     isMoving: false,
-    isGrounded: true,
+    isGrounded: initialLevel < 3,
   });
   const [facing, setFacing] = useState<Facing>('right');
   const [score, setScore] = useState(0);
@@ -2991,7 +3380,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
     portalWidth: number;
     portalHeight: number;
   } | null>(null);
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const [currentLevel, setCurrentLevel] = useState(initialLevel);
   const [currentWeapon, setCurrentWeapon] = useState(
     () => carriedProgress?.weapon ?? 0
   );
@@ -3000,17 +3389,18 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
     { x: number; y: number; born: number; id: number }[]
   >([]);
   const cowXRef = useRef(PLAYER_START_X);
-  const cowBottomRef = useRef(GROUND_HEIGHT);
+  const cowBottomRef = useRef(initialCowBottom);
   const cameraXRef = useRef(0);
   const velocityXRef = useRef(0);
   const velocityYRef = useRef(0);
-  const isGroundedRef = useRef(true);
+  const isGroundedRef = useRef(initialLevel < 3);
   const platformExitRef = useRef<{ top: number; until: number } | null>(null);
+  const holeDeathPendingAtRef = useRef<number | null>(null);
   const jumpCountRef = useRef(0);
   const [isDiving, setIsDiving] = useState(false);
   const downHeldRef = useRef(false);
   const upHeldRef = useRef(false);
-  const underwaterBottomRef = useRef(UNDERWATER_START_BOTTOM);
+  const underwaterBottomRef = useRef(initialCowBottom);
 
   useLayoutEffect(() => {
     if (cowBottomRef.current >= GROUND_HEIGHT - 0.5) {
@@ -3019,6 +3409,14 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
       jumpCountRef.current = 0;
     }
   }, []);
+
+  const inputRef = useRef<InputState>({
+    left: false,
+    right: false,
+    down: false,
+    fire: false,
+    jumpRequested: false,
+  });
   const leftHeldRef = useRef(false);
   const rightHeldRef = useRef(false);
   const isPressingLeftRef = useRef(false);
@@ -3041,8 +3439,8 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const octopusBallIdRef = useRef(0);
   const [fireballs, setFireballs] = useState<Fireball[]>([]);
   const fireballsRef = useRef<Fireball[]>([]);
-  const [powerOrb, setPowerOrb] = useState<{ x: number; bottom: number } | null>(null);
-  const powerOrbRef = useRef<{ x: number; bottom: number } | null>(null);
+  const [powerOrb, setPowerOrb] = useState(initialPowerOrb);
+  const powerOrbRef = useRef(initialPowerOrb);
   const [cowEmpowered, setCowEmpowered] = useState(false);
   const cowEmpoweredRef = useRef(false);
   const fireballIdRef = useRef(0);
@@ -3054,7 +3452,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   const scoreRef = useRef(0);
   const coinsRefCount = useRef(carriedProgress?.coins ?? 0);
   const weaponRef = useRef(carriedProgress?.weapon ?? 0);
-  const levelRef = useRef(1);
+  const levelRef = useRef(initialLevel);
   const nextObstacleXRef = useRef(INITIAL_NEXT_OBSTACLE_X);
   const obstacleIdRef = useRef(obstacles.length);
   const slimeIdRef = useRef(1000000);
@@ -3116,18 +3514,24 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   }, [shopOpen, shopSlide]);
 
   useEffect(() => {
+    const maxHp = currentLevel >= 3 ? DRAGON_HEALTH : BOSS_MAX_HP;
     Animated.timing(bossHpAnim, {
-      toValue: BOSS_MAX_HP > 0 ? Math.max(0, bossHp) / BOSS_MAX_HP : 0,
+      toValue: maxHp > 0 ? Math.max(0, bossHp) / maxHp : 0,
       duration: 220,
       useNativeDriver: false,
     }).start();
-  }, [bossHp, bossHpAnim]);
+  }, [bossHp, bossHpAnim, currentLevel]);
 
   const openShop = useCallback(() => {
     if (gameOverRef.current || portalAbsorbRef.current || mudSinkRef.current !== null) {
       return;
     }
     // Suelta los controles para que la vaquita no siga corriendo al volver.
+    inputRef.current.left = false;
+    inputRef.current.right = false;
+    inputRef.current.down = false;
+    inputRef.current.fire = false;
+    inputRef.current.jumpRequested = false;
     leftHeldRef.current = false;
     rightHeldRef.current = false;
     isMovingLeftRef.current = false;
@@ -3179,6 +3583,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
   useEffect(() => {
     let frameId = 0;
     let running = false;
+    let pending = false;
     let lastTime = 0;
 
     if (carriedProgress === null) {
@@ -3223,6 +3628,8 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
       isMovingLeftRef.current = false;
       isPressingLeftRef.current = false;
       isPressingRightRef.current = false;
+      shopOpenRef.current = false;
+      setShopOpen(false);
       setGameOver(true);
       setCowDead(true);
       setBestScore((currentBest) => Math.max(currentBest, scoreRef.current));
@@ -3257,6 +3664,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
     };
 
     const loop = (time: number) => {
+      pending = false;
       if (!running) {
         return;
       }
@@ -3274,8 +3682,34 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
       // La armería pausa la partida mientras el jugador elige un arma.
       if (shopOpenRef.current) {
+        pending = true;
         frameId = requestAnimationFrame(loop);
         return;
+      }
+
+      const input = inputRef.current;
+      leftHeldRef.current = input.left;
+      rightHeldRef.current = input.right;
+      downHeldRef.current = input.down;
+      isMovingRightRef.current = input.right;
+      isMovingLeftRef.current = input.left;
+
+      if (input.jumpRequested) {
+        input.jumpRequested = false;
+        if (
+          levelRef.current < 3 &&
+          !portalAbsorbRef.current &&
+          mudSinkRef.current === null
+        ) {
+          if (isGroundedRef.current) {
+            velocityYRef.current = JUMP_SPEED;
+            isGroundedRef.current = false;
+            jumpCountRef.current = 0;
+          } else if (jumpCountRef.current < MAX_JUMPS) {
+            velocityYRef.current = JUMP_SPEED;
+            jumpCountRef.current += 1;
+          }
+        }
       }
 
       // Hundimiento de la trampa: la vaquita queda congelada mientras baja.
@@ -3450,48 +3884,151 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
       if (isUnderwater && !gameOverRef.current && !levelCompletedRef.current) {
         const nowSeconds = time / 1000;
         let columnsChanged = false;
-        const gapBottom = OCTO_GAP_CENTER - OCTO_GAP_HEIGHT / 2;
-        const gapTop = OCTO_GAP_CENTER + OCTO_GAP_HEIGHT / 2;
+        const dragon = obstaclesRef.current.find(
+          (obstacle) => obstacle.type === 'sea_dragon'
+        );
+        if (dragon && !dragon.isDead) {
+          const diveBottom = GROUND_HEIGHT - DRAGON_BOX_HEIGHT * 0.3;
+          const maxDragonBottom = SCREEN_HEIGHT - DRAGON_BOX_HEIGHT - 8;
+          const beginDive = () => {
+            dragon.dragonState = 'diving';
+            dragon.dragonPhaseStartedAt = nowSeconds;
+            dragon.dragonPhaseUntil =
+              nowSeconds + DRAGON_DIVE_FRAME_SECONDS * 3;
+            dragon.dragonFrame = 0;
+            dragon.active = false;
+            dragon.bottom = diveBottom;
+          };
 
-        for (const column of octopusColumnsRef.current) {
-          const overlapsColumnX =
-            cowXRef.current + COW_WIDTH > column.x - 90 &&
-            cowXRef.current < column.x + 90;
-          const overlapsSolid =
-            overlapsColumnX &&
-            (cowBottomRef.current + COW_HEIGHT > gapTop ||
-              cowBottomRef.current < gapBottom);
-          if (overlapsSolid) {
-            takeDamage();
+          if (
+            dragon.dragonState === 'hidden' &&
+            cowXRef.current >= DRAGON_TRIGGER_X
+          ) {
+            dragon.x = Math.min(
+              DRAGON_MAX_X,
+              Math.max(DRAGON_TRIGGER_X, cowXRef.current + 420)
+            );
+            beginDive();
+            setBossHp(dragon.health ?? DRAGON_HEALTH);
           }
 
-          const inGap =
-            cowBottomRef.current >= gapBottom - 8 &&
-            cowBottomRef.current + COW_HEIGHT <= gapTop + 8;
-          if (
-            !column.triggered &&
-            inGap &&
-            cowXRef.current + COW_WIDTH > column.x - 34 &&
-            cowXRef.current < column.x + 34
-          ) {
-            column.triggered = true;
+          if (dragon.dragonState === 'diving') {
+            dragon.dragonFrame = Math.min(
+              2,
+              Math.floor(
+                (nowSeconds - dragon.dragonPhaseStartedAt!) /
+                  DRAGON_DIVE_FRAME_SECONDS
+              )
+            );
+            if (nowSeconds >= dragon.dragonPhaseUntil!) {
+              const emergeMin = Math.max(
+                DRAGON_TRIGGER_X,
+                cowXRef.current - 180
+              );
+              const emergeMax = Math.min(
+                DRAGON_MAX_X,
+                Math.max(emergeMin, cowXRef.current + 460)
+              );
+              dragon.x = randomBetween(emergeMin, emergeMax);
+              dragon.bottom = diveBottom;
+              dragon.dragonState = 'emerging';
+              dragon.dragonPhaseStartedAt = nowSeconds;
+              dragon.dragonPhaseUntil = nowSeconds + DRAGON_EMERGE_SECONDS;
+              dragon.dragonFrame = 3;
+              dragon.active = true;
+            }
+          } else if (dragon.dragonState === 'emerging') {
+            const surfaceBottom = Math.min(
+              GROUND_HEIGHT + DRAGON_BOX_HEIGHT * 0.15,
+              maxDragonBottom
+            );
+            dragon.bottom = Math.min(
+              surfaceBottom,
+              dragon.bottom + DRAGON_VERTICAL_SPEED * 2 * delta
+            );
+            if (nowSeconds >= dragon.dragonPhaseUntil!) {
+              dragon.bottom = surfaceBottom;
+              dragon.dragonState = 'advancing';
+              dragon.dragonPhaseStartedAt = nowSeconds;
+              dragon.dragonPhaseUntil =
+                nowSeconds +
+                randomBetween(
+                  DRAGON_NEXT_DIVE_MIN_SECONDS,
+                  DRAGON_NEXT_DIVE_MAX_SECONDS
+                );
+            }
+          } else if (dragon.dragonState === 'advancing') {
+            const dx =
+              cowXRef.current +
+              COW_WIDTH / 2 -
+              (dragon.x + DRAGON_BOX_WIDTH / 2);
+            const direction: Facing = dx >= 0 ? 'right' : 'left';
+            dragon.facing = direction;
+            const step = Math.min(Math.abs(dx), DRAGON_ADVANCE_SPEED * delta);
+            dragon.x += (direction === 'right' ? 1 : -1) * step;
+
+            const targetBottom = Math.min(
+              maxDragonBottom,
+              Math.max(
+                GROUND_HEIGHT,
+                cowBottomRef.current + DRAGON_BOX_HEIGHT * 0.35
+              )
+            );
+            const dy = targetBottom - dragon.bottom;
+            const verticalStep = Math.min(
+              Math.abs(dy),
+              DRAGON_VERTICAL_SPEED * delta
+            );
+            dragon.bottom += Math.sign(dy) * verticalStep;
+            dragon.dragonFrame =
+              4 +
+              (Math.floor(
+                (nowSeconds - dragon.dragonPhaseStartedAt!) /
+                  DRAGON_ADVANCE_FRAME_SECONDS
+              ) %
+                3);
+            if (nowSeconds >= dragon.dragonPhaseUntil!) {
+              beginDive();
+            }
+          }
+        }
+        for (const column of octopusColumnsRef.current) {
+          const overlapsColumnX =
+            cowXRef.current + COW_WIDTH >
+              column.x - OCTO_HITBOX_HALF_WIDTH &&
+            cowXRef.current < column.x + OCTO_HITBOX_HALF_WIDTH;
+          const overlapsSolid =
+            overlapsColumnX &&
+            (cowBottomRef.current + COW_HEIGHT >
+              screenHeight - OCTO_SPRITE_HEIGHT + OCTO_GAP_TOLERANCE ||
+              cowBottomRef.current <
+                OCTO_LOWER_VISUAL_TOP - OCTO_GAP_TOLERANCE);
+          if (overlapsSolid && column.solidDamageArmed) {
+            if (takeDamage()) {
+              column.solidDamageArmed = false;
+            }
+          } else if (!overlapsSolid) {
+            column.solidDamageArmed = true;
+          }
+
+          if (nowSeconds >= column.nextShotAt) {
+            column.nextShotAt = nowSeconds + OCTO_SHOT_COOLDOWN_SECONDS;
             column.attackUntil = nowSeconds + OCTO_ATTACK_SECONDS;
+            column.shotCount += 1;
             columnsChanged = true;
 
-            const originX = column.x;
-            const originBottom = OCTO_GAP_CENTER;
-            const targetX = cowXRef.current + COW_WIDTH / 2;
-            const targetBottom = cowBottomRef.current + COW_HEIGHT / 2;
-            const dx = targetX - originX;
-            const dy = targetBottom - originBottom;
-            const distance = Math.max(1, Math.hypot(dx, dy));
+            const dirX = column.shotCount % 2 === 0 ? 1 : -1;
+            const spawnBottom = randomBetween(
+              OCTO_GAP_BOTTOM + 24,
+              OCTO_GAP_TOP - 24
+            );
             octopusBallIdRef.current += 1;
             octopusBallsRef.current.push({
               id: octopusBallIdRef.current,
-              x: originX,
-              bottom: originBottom,
-              vx: (dx / distance) * OCTO_BALL_SPEED,
-              vy: (dy / distance) * OCTO_BALL_SPEED,
+              x: column.x + dirX * OCTO_BALL_SPAWN_OFFSET,
+              bottom: spawnBottom,
+              vx: dirX * OCTO_BALL_SPEED,
+              vy: 0,
               born: nowSeconds,
             });
             setOctopusBalls([...octopusBallsRef.current]);
@@ -3503,27 +4040,43 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         }
 
         let ballsChanged = false;
+        const velocityBeforeBalls = velocityXRef.current;
+        const canTakeBallDamage = performance.now() >= invulnerableUntilRef.current;
         for (const ball of octopusBallsRef.current) {
           ball.x += ball.vx * delta;
           ball.bottom += ball.vy * delta;
+          const hitX =
+            cowXRef.current + 10 < ball.x + OCTO_BALL_HITBOX / 2 &&
+            cowXRef.current + COW_WIDTH - 10 >
+              ball.x - OCTO_BALL_HITBOX / 2;
+          const hitY =
+            cowBottomRef.current + 8 < ball.bottom + OCTO_BALL_HITBOX / 2 &&
+            cowBottomRef.current + COW_HEIGHT - 8 >
+              ball.bottom - OCTO_BALL_HITBOX / 2;
           if (
-            cowXRef.current < ball.x + OCTO_BALL_SIZE / 2 &&
-            cowXRef.current + COW_WIDTH > ball.x - OCTO_BALL_SIZE / 2 &&
-            cowBottomRef.current < ball.bottom + OCTO_BALL_SIZE / 2 &&
-            cowBottomRef.current + COW_HEIGHT > ball.bottom - OCTO_BALL_SIZE / 2
+            hitX &&
+            hitY &&
+            nowSeconds - ball.born >= OCTO_BALL_ARM_DELAY_SECONDS
           ) {
-            takeDamage();
+            if (canTakeBallDamage) {
+              takeDamage();
+            }
             ball.born = -1000;
             ballsChanged = true;
           }
         }
-        const activeBalls = octopusBallsRef.current.filter(
-          (ball) =>
-            ball.born > 0 &&
-            nowSeconds - ball.born < 3 &&
-            ball.x > cameraXRef.current - 200 &&
-            ball.x < cameraXRef.current + screenWidth + 200
-        );
+        if (!gameOverRef.current && !levelCompletedRef.current) {
+          velocityXRef.current = velocityBeforeBalls;
+        }
+        const activeBalls = octopusBallsRef.current
+          .filter(
+            (ball) =>
+              ball.born > 0 &&
+              nowSeconds - ball.born < OCTO_BALL_LIFETIME_SECONDS &&
+              ball.x > cameraXRef.current - 200 &&
+              ball.x < cameraXRef.current + screenWidth + 200
+          )
+          .slice(-OCTO_MAX_ACTIVE_BALLS);
         if (activeBalls.length !== octopusBallsRef.current.length || ballsChanged) {
           octopusBallsRef.current = activeBalls;
           setOctopusBalls([...activeBalls]);
@@ -4147,6 +4700,11 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
           }
         }
 
+        if (overOpenHole && nextBottom < HOLE_DEATH_BOTTOM) {
+          nextBottom = HOLE_DEATH_BOTTOM;
+          velocityYRef.current = 0;
+        }
+
         cowBottomRef.current = nextBottom;
       }
 
@@ -4188,8 +4746,18 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
             cowCenterX <= obstacle.x + obstacle.width &&
             cowBottomRef.current <= HOLE_DEATH_BOTTOM
           ) {
-            triggerGameOver();
+            if (holeDeathPendingAtRef.current === null) {
+              holeDeathPendingAtRef.current = performance.now() / 1000;
+            }
           }
+        }
+
+        if (
+          holeDeathPendingAtRef.current !== null &&
+          performance.now() / 1000 - holeDeathPendingAtRef.current >=
+            HOLE_DEATH_DELAY_SECONDS
+        ) {
+          triggerGameOver();
         }
       }
 
@@ -4266,6 +4834,25 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
         // LÃ³gica de patrullaje independiente basada en coordenadas fijas de inicio y rango
         const minX = obstacle.startX - obstacle.range;
         const maxX = obstacle.startX + obstacle.range;
+
+        if (obstacle.respawnAt !== undefined && time / 1000 >= obstacle.respawnAt) {
+          obstacle.x = Math.max(
+            minX,
+            Math.min(maxX - obstacle.width, obstacle.respawnX ?? obstacle.x)
+          );
+          obstacle.vanished = false;
+          obstacle.respawnAt = undefined;
+          obstacle.respawnX = undefined;
+          const cowIsLeft =
+            cowXRef.current + COW_WIDTH / 2 < obstacle.x + obstacle.width / 2;
+          obstacle.facing = cowIsLeft ? 'left' : 'right';
+          obstacle.vx = cowIsLeft ? -Math.abs(baseSpeed) : Math.abs(baseSpeed);
+          setObstacles([...obstaclesRef.current]);
+        }
+
+        if (obstacle.vanished === true) {
+          continue;
+        }
 
         const isArenaBoss =
           obstacle.isBoss === true || obstacle.bossConfig !== undefined;
@@ -4455,6 +5042,24 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
       // Update trap platforms, piranhas, and goal.
       for (const obstacle of obstaclesRef.current) {
+        if (
+          obstacle.type === 'upper_platform' &&
+          obstacle.ladderTrap === true &&
+          !obstacle.ladderTrapTriggered
+        ) {
+          const inset = obstacle.collisionInsetX ?? 0;
+          const standingOnLadder =
+            isGroundedRef.current &&
+            Math.abs(
+              cowBottomRef.current - (obstacle.bottom + obstacle.height)
+            ) <= 2 &&
+            cowXRef.current + COW_WIDTH > obstacle.x + inset &&
+            cowXRef.current < obstacle.x + obstacle.width - inset;
+          if (standingOnLadder) {
+            obstacle.ladderTrapTriggered = true;
+            takeDamage();
+          }
+        }
 
         // Trampa con pinchos: se activa TRAP_ARM_DELAY segundos tras ser pisada
         if (obstacle.type === 'trap_platform' && !obstacle.trapTriggered) {
@@ -4654,6 +5259,12 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
             ) {
               continue;
             }
+            if (
+              obstacle.type === 'sea_dragon' &&
+              (obstacle.active !== true || obstacle.dragonState === 'diving')
+            ) {
+              continue;
+            }
             if (obstacle.type === 'bat' && obstacle.active !== true) {
               continue;
             }
@@ -4736,6 +5347,7 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
               hitObstacle.type === 'piranha' ||
               hitObstacle.type === 'bat' ||
               hitObstacle.type === 'chase_monster' ||
+              hitObstacle.type === 'sea_dragon' ||
               hitObstacle.type === 'destructible' ||
               hitObstacle.type === 'moving';
 
@@ -4744,11 +5356,16 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
               const currentHealth = hitObstacle.health ?? 1;
               const bulletDamage =
                 (weapon.damage ?? 1) *
-                (hitObstacle.type === 'chase_monster' && cowEmpoweredRef.current
+                ((hitObstacle.type === 'chase_monster' ||
+                  hitObstacle.type === 'sea_dragon') &&
+                cowEmpoweredRef.current
                   ? POWER_ORB_DAMAGE_MULTIPLIER
                   : 1);
               const newHealth = currentHealth - bulletDamage;
-              if (hitObstacle.type === 'chase_monster') {
+              if (
+                hitObstacle.type === 'chase_monster' ||
+                hitObstacle.type === 'sea_dragon'
+              ) {
                 setBossHp(Math.max(0, newHealth));
               }
 
@@ -4782,6 +5399,11 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
 
               if (newHealth <= 0) {
                 hitObstacle.isDead = true;
+                if (hitObstacle.type === 'sea_dragon') {
+                  setBossHp(0);
+                  levelCompletedRef.current = true;
+                  setLevelCompleted(true);
+                }
                 if (hitObstacle.type === 'chase_monster') {
                   if (idx !== -1) {
                     obstaclesRef.current[idx].health = 0;
@@ -4840,7 +5462,52 @@ export default function GameScreen({ onExit }: GameScreenProps) {  const screenW
                 setCoins(coinsRefCount.current);
               } else {
                 if (idx !== -1) {
-                  obstaclesRef.current[idx].health = newHealth;
+                  const boss = obstaclesRef.current[idx];
+                  boss.health = newHealth;
+
+                  const minArenaX = (boss.startX ?? 0) - (boss.range ?? 0);
+                  const maxArenaX = (boss.startX ?? 0) + (boss.range ?? 0);
+                  const cowX = cowXRef.current;
+                  const bossIsArenaBoss =
+                    levelRef.current === 1 &&
+                    boss.type === 'enemy' &&
+                    boss.isBoss === true &&
+                    boss.startX !== undefined &&
+                    boss.range !== undefined;
+                  const standingOnPlainGround =
+                    isGroundedRef.current &&
+                    Math.abs(cowBottomRef.current - GROUND_HEIGHT) <= 2 &&
+                    getTerrainSupport(
+                      cowX,
+                      COW_WIDTH,
+                      terrainRef.current
+                    ) >= GROUND_HEIGHT - 2 &&
+                    getCowGroundSupport(
+                      cowX,
+                      cowBottomRef.current,
+                      obstaclesRef.current
+                    ) <= GROUND_HEIGHT + 2;
+                  const cowStandingInArena =
+                    standingOnPlainGround &&
+                    !isMovingRightRef.current &&
+                    !isMovingLeftRef.current &&
+                    cowX + COW_WIDTH > minArenaX &&
+                    cowX < maxArenaX;
+
+                  if (bossIsArenaBoss && cowStandingInArena) {
+                    const bossCenter = boss.x + boss.width / 2;
+                    const cowCenter = cowX + COW_WIDTH / 2;
+                    const desiredX =
+                      bossCenter >= cowCenter
+                        ? cowX - BOSS_WIDTH - 28
+                        : cowX + COW_WIDTH + 28;
+                    boss.respawnX = Math.max(
+                      minArenaX,
+                      Math.min(maxArenaX - boss.width, desiredX)
+                    );
+                    boss.respawnAt = now + BOSS_TELEPORT_VANISH_SECONDS;
+                    boss.vanished = true;
+                  }
                 }
                 setObstacles([...obstaclesRef.current]);
               }
@@ -4887,9 +5554,19 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
           obstacle.type !== 'piranha' &&
           obstacle.type !== 'bat' &&
           obstacle.type !== 'chase_monster' &&
+          obstacle.type !== 'sea_dragon' &&
           obstacle.type !== 'slime'
         ) {
           continue;
+        }
+        if (obstacle.type === 'sea_dragon') {
+          if (
+            obstacle.isDead ||
+            obstacle.active !== true ||
+            obstacle.dragonState === 'diving'
+          ) {
+            continue;
+          }
         }
         if (obstacle.type === 'slime') {
           const slimeRect: Rect = {
@@ -5200,16 +5877,19 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
 
       updateView();
 
+      pending = true;
       frameId = requestAnimationFrame(loop);
     };
 
     const start = () => {
-      if (running) {
+      if (running && pending) {
         return;
       }
-
+      cancelAnimationFrame(frameId);
+      pending = false;
       running = true;
       lastTime = 0;
+      pending = true;
       frameId = requestAnimationFrame(loop);
     };
 
@@ -5217,7 +5897,9 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     start();
 
     return () => {
+      running = false;
       cancelAnimationFrame(frameId);
+      startLoopRef.current = null;
     };
   }, [screenHeight, screenWidth]);
 
@@ -5249,6 +5931,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
       return;
     }
 
+    inputRef.current.left = true;
     isPressingLeftRef.current = true;
     isMovingLeftRef.current = true;
     leftHeldRef.current = true;
@@ -5258,6 +5941,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, [requestStart, updateHorizontalVelocity]);
 
   const handleLeftPressOut = useCallback(() => {
+    inputRef.current.left = false;
     isPressingLeftRef.current = false;
     isMovingLeftRef.current = false;
     leftHeldRef.current = false;
@@ -5269,6 +5953,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
       return;
     }
 
+    inputRef.current.right = true;
     isPressingRightRef.current = true;
     isMovingRightRef.current = true;
     rightHeldRef.current = true;
@@ -5278,6 +5963,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
   }, [requestStart, updateHorizontalVelocity]);
 
   const handleRightPressOut = useCallback(() => {
+    inputRef.current.right = false;
     isPressingRightRef.current = false;
     isMovingRightRef.current = false;
     rightHeldRef.current = false;
@@ -5295,14 +5981,7 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
       return;
     }
 
-    if (isGroundedRef.current) {
-      velocityYRef.current = JUMP_SPEED;
-      isGroundedRef.current = false;
-      jumpCountRef.current = 0;
-    } else if (jumpCountRef.current < MAX_JUMPS) {
-      velocityYRef.current = JUMP_SPEED;
-      jumpCountRef.current += 1;
-    }
+    inputRef.current.jumpRequested = true;
     requestStart();
   }, [requestStart]);
 
@@ -5318,12 +5997,14 @@ cameraXRef.current = Math.max(0, cowXRef.current - CAMERA_OFFSET_X);
     ) {
       return;
     }
+    inputRef.current.down = true;
     downHeldRef.current = true;
     setIsDiving(true);
     requestStart();
   }, [requestStart]);
 
   const handleDownPressOut = useCallback(() => {
+    inputRef.current.down = false;
     downHeldRef.current = false;
     setIsDiving(false);
   }, []);
@@ -5450,7 +6131,15 @@ let muzzleX: number;
   }, [cowDead, currentWeapon, facing, muzzleFlashBorn, requestStart, view.isGrounded]);
 
   const handleShootPressIn = useCallback(() => {
+    inputRef.current.fire = true;
     shoot();
+  }, [shoot]);
+  const handleShootPressOut = useCallback(() => {
+    inputRef.current.fire = false;
+  }, []);
+  const shootRef = useRef(shoot);
+  useEffect(() => {
+    shootRef.current = shoot;
   }, [shoot]);
 
   // Keyboard controls for PC/Web
@@ -5493,7 +6182,7 @@ let muzzleX: number;
         case 'f':
         case 'F':
           event.preventDefault();
-          handleShootPressIn();
+          shootRef.current();
           break;
       }
     };
@@ -5524,6 +6213,10 @@ let muzzleX: number;
       }
     };
 
+    if (Platform.OS !== 'web' || typeof window.addEventListener !== 'function') {
+      return;
+    }
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
@@ -5531,18 +6224,24 @@ let muzzleX: number;
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleLeftPressIn, handleLeftPressOut, handleRightPressIn, handleRightPressOut, handleJumpPressIn, handleJumpPressOut, handleDownPressIn, handleDownPressOut, handleDropPressIn, handleShootPressIn]);
+  }, [handleLeftPressIn, handleLeftPressOut, handleRightPressIn, handleRightPressOut, handleJumpPressIn, handleJumpPressOut, handleDownPressIn, handleDownPressOut, handleDropPressIn]);
 
   const restart = useCallback(() => {
-    const beforeLevel = carriedProgress ?? {
-      coins: 0,
-      ownedWeapons: WEAPONS.map((_, index) => index === 0),
-      weapon: 0,
+    const beforeLevel: CarriedProgress = {
+      coins: coinsRefCount.current,
+      ownedWeapons: [...ownedWeaponsRef.current],
+      weapon: weaponRef.current,
     };
+    carriedProgress = beforeLevel;
     coinsRefCount.current = beforeLevel.coins;
     ownedWeaponsRef.current = [...beforeLevel.ownedWeapons];
     weaponRef.current = beforeLevel.weapon;
-    const levelId = levelRef.current;
+    const levelId = currentLevel;
+    const nextPowerOrb =
+      levelId >= 3
+        ? { x: LEVEL3_POWER_ORB_X, bottom: LEVEL3_POWER_ORB_BOTTOM }
+        : null;
+    levelRef.current = levelId;
     const initialObstacles = createInitialObstacles(levelId);
     const initialTerrain = createInitialTerrain();
     const initialCoins = createLevelCoins(levelId);
@@ -5554,10 +6253,18 @@ let muzzleX: number;
     downHeldRef.current = false;
     upHeldRef.current = false;
     platformExitRef.current = null;
+    holeDeathPendingAtRef.current = null;
     cameraXRef.current = 0;
     velocityXRef.current = 0;
     velocityYRef.current = 0;
     isGroundedRef.current = true;
+    inputRef.current = {
+      left: false,
+      right: false,
+      down: false,
+      fire: false,
+      jumpRequested: false,
+    };
     leftHeldRef.current = false;
     rightHeldRef.current = false;
     isMovingRightRef.current = false;
@@ -5578,7 +6285,6 @@ let muzzleX: number;
     lastShotRef.current = 0;
     scoreRef.current = 0;
     shopOpenRef.current = false;
-    shopSlide.setValue(0);
     nextObstacleXRef.current = INITIAL_NEXT_OBSTACLE_X;
     obstacleIdRef.current = initialObstacles.length;
     gameOverRef.current = false;
@@ -5608,8 +6314,8 @@ let muzzleX: number;
     setMonsterPhase('idle');
     setBossHp(0);
     bossHpAnim.setValue(0);
-    powerOrbRef.current = null;
-    setPowerOrb(null);
+    powerOrbRef.current = nextPowerOrb;
+    setPowerOrb(nextPowerOrb);
     cowEmpoweredRef.current = false;
     setCowEmpowered(false);
     setIsDiving(false);
@@ -5648,14 +6354,25 @@ let muzzleX: number;
     setCurrentWeapon(weaponRef.current);
     setOwnedWeapons([...ownedWeaponsRef.current]);
     setShopOpen(false);
+    setCurrentLevel(levelId);
+    onLevelChange?.(levelId);
 
-    requestStart();
-  }, [requestStart, shopSlide, bossHpAnim]);
+    if (onRestartSession) {
+      onRestartSession();
+    } else {
+      requestStart();
+    }
+  }, [requestStart, onRestartSession, onLevelChange, currentLevel, bossHpAnim]);
 
   const advanceLevel = useCallback(() => {
     const nextLevelId = Math.min(LEVELS.length, levelRef.current + 1);
     levelRef.current = nextLevelId;
     setCurrentLevel(nextLevelId);
+    onLevelChange?.(nextLevelId);
+    const nextPowerOrb =
+      nextLevelId >= 3
+        ? { x: LEVEL3_POWER_ORB_X, bottom: LEVEL3_POWER_ORB_BOTTOM }
+        : null;
 
     carriedProgress = {
       coins: coinsRefCount.current,
@@ -5677,10 +6394,18 @@ let muzzleX: number;
     downHeldRef.current = false;
     upHeldRef.current = false;
     platformExitRef.current = null;
+    holeDeathPendingAtRef.current = null;
     cameraXRef.current = 0;
     velocityXRef.current = 0;
     velocityYRef.current = 0;
     isGroundedRef.current = true;
+    inputRef.current = {
+      left: false,
+      right: false,
+      down: false,
+      fire: false,
+      jumpRequested: false,
+    };
     leftHeldRef.current = false;
     rightHeldRef.current = false;
     isMovingRightRef.current = false;
@@ -5729,8 +6454,8 @@ let muzzleX: number;
     setMonsterPhase('idle');
     setBossHp(0);
     bossHpAnim.setValue(0);
-    powerOrbRef.current = null;
-    setPowerOrb(null);
+    powerOrbRef.current = nextPowerOrb;
+    setPowerOrb(nextPowerOrb);
     cowEmpoweredRef.current = false;
     setCowEmpowered(false);
     setIsDiving(false);
@@ -5765,6 +6490,7 @@ let muzzleX: number;
     });
     setFacing('right');
     setScore(0);
+    shopOpenRef.current = false;
     setShopOpen(false);
 
     coinsRefCount.current = carriedCoins;
@@ -5775,7 +6501,7 @@ let muzzleX: number;
     setCurrentWeapon(carriedWeapon);
 
     requestStart();
-  }, [requestStart, bossHpAnim]);
+  }, [requestStart, onLevelChange, bossHpAnim]);
 
 
   // Portal: cuando absorbe a la vaquita, espera la animación y pasa al nivel 2.
@@ -5903,6 +6629,7 @@ let muzzleX: number;
   const cowRestLeft =
     view.cowScreenX + (COW_WIDTH - cowContentWidth) / 2 - cowContentLeft;
   const cowRestBottom = view.cowBottom - cowContentBottomGap;
+  const cowBelowGround = currentLevel < 3 && view.cowBottom < GROUND_HEIGHT - 1;
 
   const cowRenderLeft = portalAbsorb
     ? cowRestLeft +
@@ -5965,10 +6692,15 @@ let muzzleX: number;
   const shopPanelWidth = Math.min(320, screenWidth * 0.86);
   const isInvulnerable = view.now * 1000 < invulnerableUntil;
   const cowBlinkOpacity =
-    isInvulnerable && Math.floor(view.now * 12) % 2 === 0 ? 0.25 : 1;
+    isInvulnerable && Math.floor(view.now * 10) % 2 === 0 ? 0.45 : 1;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { width: '100%', height: '100%', overflow: 'hidden' },
+      ]}
+    >
       <Image source={backgroundImage} style={styles.bgImage} resizeMode="cover" />
 
       {currentLevel > 0 && (
@@ -6009,7 +6741,7 @@ let muzzleX: number;
             />
           </View>
           <Text style={styles.bossHpValue}>
-            {bossHp}/{BOSS_MAX_HP}
+            {bossHp}/{currentLevel >= 3 ? DRAGON_HEALTH : BOSS_MAX_HP}
           </Text>
         </View>
       )}
@@ -6158,6 +6890,44 @@ let muzzleX: number;
             return <Piranha key={obstacle.id} obstacle={obstacle} left={left} />;
           case 'spike_trap':
             return <SpikeTrap key={obstacle.id} obstacle={obstacle} left={left} />;
+          case 'sea_dragon': {
+            if (
+              obstacle.dragonState === undefined ||
+              obstacle.dragonState === 'hidden' ||
+              obstacle.isDead
+            ) {
+              return null;
+            }
+            const frame = DRAGON_FRAMES[obstacle.dragonFrame ?? 0];
+            return (
+              <View
+                key={obstacle.id}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: Number(obstacle.x - view.cameraX),
+                  bottom: Number(obstacle.bottom),
+                  width: DRAGON_BOX_WIDTH,
+                  height: DRAGON_BOX_HEIGHT,
+                  zIndex: 7,
+                  transform: [
+                    { scaleX: obstacle.facing === 'left' ? -1 : 1 },
+                  ],
+                }}
+              >
+                <Image
+                  source={frame.source}
+                  style={{
+                    position: 'absolute',
+                    ...getDragonImageStyle(frame),
+                  }}
+                  resizeMode="stretch"
+                  fadeDuration={0}
+                  accessible={false}
+                />
+              </View>
+            );
+          }
           case 'portal':
             return (
               <Portal
@@ -6258,7 +7028,7 @@ let muzzleX: number;
             ? 2
             : Math.floor(view.now / OCTO_ANIM_SECONDS) % 2;
           const source = OCTO_SPRITES[column.variant][spriteIndex];
-          const imageLeft = (OCTO_COLUMN_WIDTH - 1376) / 2;
+          const content = OCTO_CONTENT[column.variant][spriteIndex];
           return (
             <React.Fragment key={`octo-${column.id}`}>
               <View
@@ -6268,9 +7038,9 @@ let muzzleX: number;
                   left: Number(
                     column.x - view.cameraX - OCTO_COLUMN_WIDTH / 2
                   ),
-                  bottom: OCTO_GAP_CENTER + OCTO_GAP_HEIGHT / 2,
+                  top: 0,
                   width: OCTO_COLUMN_WIDTH,
-                  height: OCTO_PIECE_HEIGHT,
+                  height: OCTO_SPRITE_HEIGHT,
                   overflow: 'hidden',
                   zIndex: 3,
                 }}
@@ -6279,11 +7049,7 @@ let muzzleX: number;
                   source={source}
                   style={{
                     position: 'absolute',
-                    left: imageLeft,
-                    bottom:
-                      -(768 - OCTO_PIECE_BOTTOM_Y[column.variant][spriteIndex]),
-                    width: 1376,
-                    height: 768,
+                    ...getOctoImageStyle(content.upper, 'upper'),
                   }}
                   resizeMode="contain"
                   fadeDuration={0}
@@ -6299,7 +7065,7 @@ let muzzleX: number;
                   ),
                   bottom: GROUND_HEIGHT,
                   width: OCTO_COLUMN_WIDTH,
-                  height: OCTO_PIECE_HEIGHT,
+                  height: OCTO_SPRITE_HEIGHT,
                   overflow: 'hidden',
                   zIndex: 3,
                 }}
@@ -6308,14 +7074,7 @@ let muzzleX: number;
                   source={source}
                   style={{
                     position: 'absolute',
-                    left: imageLeft,
-                    bottom:
-                      -(
-                        768 -
-                        OCTO_BOTTOM_PIECE_BOTTOM_Y[column.variant][spriteIndex]
-                      ),
-                    width: 1376,
-                    height: 768,
+                    ...getOctoImageStyle(content.lower, 'lower'),
                   }}
                   resizeMode="contain"
                   fadeDuration={0}
@@ -6482,6 +7241,7 @@ let muzzleX: number;
             {
               left: Number(cowRenderLeft),
               bottom: Number(cowRenderBottom),
+              zIndex: cowBelowGround ? 5 : undefined,
               opacity: (1 - absorbEase) * cowBlinkOpacity,
             },
           ]}
@@ -6541,7 +7301,6 @@ let muzzleX: number;
       </Pressable>
 
       <TouchControls
-        key={gameOver ? 'game-over' : 'playing'}
         disabled={gameOver}
         onLeftPressIn={handleLeftPressIn}
         onLeftPressOut={handleLeftPressOut}
@@ -6553,6 +7312,7 @@ let muzzleX: number;
         onDownPressOut={handleDownPressOut}
         showDown={currentLevel >= 3}
         onShootPressIn={handleShootPressIn}
+        onShootPressOut={handleShootPressOut}
       />
 
       {/* Armería deslizante */}

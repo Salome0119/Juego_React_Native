@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { Cow } from '../components/atoms/Cow';
 import { Button } from '../components/atoms/Button';
-import { COLORS, SCREEN_HEIGHT, SCREEN_WIDTH } from '../constants/theme';
+import { COLORS, useScreenDimensions } from '../constants/theme';
 
 interface HomeScreenProps {
   onStartGame: () => void;
@@ -70,14 +70,16 @@ const Cloud: React.FC<CloudProps> = ({
 };
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onStartGame }) => {
+  const { width, height } = useScreenDimensions();
+
   return (
     <View style={styles.container}>
       <Cloud top={70} left={-20} duration={5200} />
-      <Cloud top={148} left={SCREEN_WIDTH - 92} scale={0.8} duration={4400} delay={500} opacity={0.75} />
-      <Cloud top={SCREEN_HEIGHT * 0.3} left={20} scale={0.65} duration={6200} delay={1100} opacity={0.6} />
+      <Cloud top={148} left={width - 92} scale={0.8} duration={4400} delay={500} opacity={0.75} />
+      <Cloud top={height * 0.3} left={20} scale={0.65} duration={6200} delay={1100} opacity={0.6} />
       <Cloud
-        top={SCREEN_HEIGHT - 190}
-        left={SCREEN_WIDTH - 134}
+        top={height - 190}
+        left={width - 134}
         scale={1.1}
         duration={4800}
         delay={300}
