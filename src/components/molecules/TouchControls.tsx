@@ -1,6 +1,109 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import React, { useCallback, useRef } from 'react';
+import {
+  GestureResponderEvent,
+  Pressable,
+  PressableProps,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COLORS, useScreenDimensions } from '../../constants/theme';
+
+interface ControlPressableProps {
+  onActivate: () => void;
+  onDeactivate?: () => void;
+  style: PressableProps['style'];
+  accessibilityLabel?: string;
+  hitSlop?: PressableProps['hitSlop'];
+  children: React.ReactNode;
+}
+
+const ControlPressable: React.FC<ControlPressableProps> = ({
+  onActivate,
+  onDeactivate,
+  style,
+  accessibilityLabel,
+  hitSlop,
+  children,
+}) => {
+  const pointersRef = useRef(new Set<string>());
+  const activeRef = useRef(false);
+
+  const activate = useCallback(() => {
+    if (activeRef.current) {
+      return;
+    }
+    activeRef.current = true;
+    onActivate();
+  }, [onActivate]);
+
+  const deactivate = useCallback(() => {
+    if (!activeRef.current) {
+      return;
+    }
+    activeRef.current = false;
+    onDeactivate?.();
+  }, [onDeactivate]);
+
+  const handlePressIn = useCallback(() => {
+    activate();
+  }, [activate]);
+
+  const handlePressOut = useCallback(() => {
+    if (pointersRef.current.size === 0) {
+      deactivate();
+    }
+  }, [deactivate]);
+
+  const handleTouch = useCallback(
+    (event: GestureResponderEvent, isStart: boolean) => {
+      const touches = event.nativeEvent.changedTouches ?? [];
+      for (const touch of touches) {
+        if (isStart) {
+          pointersRef.current.add(touch.identifier);
+        } else {
+          pointersRef.current.delete(touch.identifier);
+        }
+      }
+      if (isStart) {
+        activate();
+      } else if (pointersRef.current.size === 0) {
+        deactivate();
+      }
+    },
+    [activate, deactivate]
+  );
+
+  const handleTouchStart = useCallback(
+    (event: GestureResponderEvent) => handleTouch(event, true),
+    [handleTouch]
+  );
+  const handleTouchEnd = useCallback(
+    (event: GestureResponderEvent) => handleTouch(event, false),
+    [handleTouch]
+  );
+  const handleTouchCancel = useCallback(
+    (event: GestureResponderEvent) => handleTouch(event, false),
+    [handleTouch]
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      cancelable={false}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      hitSlop={hitSlop ?? { top: 10, bottom: 10, left: 10, right: 10 }}
+      style={style}
+    >
+      {children}
+    </Pressable>
+  );
+};
 
 interface TouchControlsProps {
   disabled?: boolean;
@@ -14,6 +117,7 @@ interface TouchControlsProps {
   onDownPressOut?: () => void;
   showDown?: boolean;
   onShootPressIn: () => void;
+  onShootPressOut?: () => void;
 }
 
 export const TouchControls: React.FC<TouchControlsProps> = ({
@@ -28,50 +132,125 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   onDownPressOut,
   showDown = false,
   onShootPressIn,
+  onShootPressOut,
 }) => {
+  const { width, height } = useScreenDimensions();
+  const insets = useSafeAreaInsets();
+  const buttonScale = Math.min(
+    1.15,
+    Math.max(0.92, Math.min((height - 90) / 360, width / 520))
+  );
+  const moveSize = Math.round(Math.max(60, Math.min(76, 68 * buttonScale)));
+  const jumpSize = Math.round(moveSize * 1.35);
+  const gap = Math.max(12, Math.round(moveSize * 0.22));
+  const arrowFontSize = Math.round(26 * buttonScale);
+  const horizontalPadding = Math.round(12 * buttonScale);
+
   return (
-    <View pointerEvents={disabled ? 'none' : 'auto'} style={styles.container}>
-      <View style={styles.leftGroup}>
-        <Pressable
-          onPressIn={onLeftPressIn}
-          onPressOut={onLeftPressOut}
-          style={({ pressed }) => [styles.circleButton, styles.moveButton, pressed && styles.buttonPressed]}
+    <View
+      pointerEvents={disabled ? 'none' : 'box-none'}
+      style={[
+        styles.container,
+        {
+          paddingLeft: insets.left + horizontalPadding,
+          paddingRight: insets.right + horizontalPadding,
+          paddingBottom: insets.bottom + 8,
+        },
+      ]}
+    >
+      <View pointerEvents="box-none" style={[styles.leftGroup, { gap }]}>
+        <ControlPressable
+          accessibilityLabel="Izquierda"
+          onActivate={onLeftPressIn}
+          onDeactivate={onLeftPressOut}
+          style={({ pressed }) => [
+            styles.circleButton,
+            styles.moveButton,
+            { width: moveSize, height: moveSize, borderRadius: moveSize / 2 },
+            pressed && styles.buttonPressed,
+          ]}
         >
-          <Text style={styles.arrow}>{'<'}</Text>
-        </Pressable>
-        <Pressable
-          onPressIn={onRightPressIn}
-          onPressOut={onRightPressOut}
-          style={({ pressed }) => [styles.circleButton, styles.moveButton, pressed && styles.buttonPressed]}
+          <Text style={[styles.arrow, { fontSize: arrowFontSize }]}>{'<'}</Text>
+        </ControlPressable>
+        <ControlPressable
+          accessibilityLabel="Derecha"
+          onActivate={onRightPressIn}
+          onDeactivate={onRightPressOut}
+          style={({ pressed }) => [
+            styles.circleButton,
+            styles.moveButton,
+            { width: moveSize, height: moveSize, borderRadius: moveSize / 2 },
+            pressed && styles.buttonPressed,
+          ]}
         >
-          <Text style={styles.arrow}>{'>'}</Text>
-        </Pressable>
+          <Text style={[styles.arrow, { fontSize: arrowFontSize }]}>{'>'}</Text>
+        </ControlPressable>
         {showDown && (
-          <Pressable
-            onPressIn={onDownPressIn}
-            onPressOut={onDownPressOut}
-            style={({ pressed }) => [styles.circleButton, styles.downButton, pressed && styles.buttonPressed]}
+          <ControlPressable
+            accessibilityLabel="Abajo"
+            onActivate={onDownPressIn ?? (() => {})}
+            onDeactivate={onDownPressOut}
+            style={({ pressed }) => [
+              styles.circleButton,
+              styles.downButton,
+              { width: moveSize, height: moveSize, borderRadius: moveSize / 2 },
+              pressed && styles.buttonPressed,
+            ]}
           >
-            <Text style={styles.arrow}>{'↓'}</Text>
-          </Pressable>
+            <Text style={[styles.arrow, { fontSize: arrowFontSize }]}>{'↓'}</Text>
+          </ControlPressable>
         )}
       </View>
 
-      <View style={styles.rightGroup}>
-        <Pressable
-          onPressIn={onShootPressIn}
-          style={({ pressed }) => [styles.circleButton, styles.shootButton, pressed && styles.buttonPressed]}
+      <View pointerEvents="box-none" style={[styles.rightGroup, { gap }]}>
+        <ControlPressable
+          accessibilityLabel="Disparar"
+          onActivate={onShootPressIn}
+          onDeactivate={onShootPressOut}
+          style={({ pressed }) => [
+            styles.circleButton,
+            styles.shootButton,
+            { width: moveSize, height: moveSize, borderRadius: moveSize / 2 },
+            pressed && styles.buttonPressed,
+          ]}
         >
-          <Text style={styles.shootText}>F</Text>
-        </Pressable>
-        <Pressable
-          onPressIn={onJumpPressIn}
-          onPressOut={onJumpPressOut}
-          style={({ pressed }) => [styles.circleButton, styles.jumpButton, pressed && styles.buttonPressed]}
+          <Text
+            style={[styles.shootText, { fontSize: Math.round(22 * buttonScale) }]}
+          >
+            F
+          </Text>
+        </ControlPressable>
+        <ControlPressable
+          accessibilityLabel="Salto"
+          onActivate={onJumpPressIn}
+          onDeactivate={onJumpPressOut}
+          style={({ pressed }) => [
+            styles.circleButton,
+            styles.jumpButton,
+            { width: jumpSize, height: jumpSize, borderRadius: jumpSize / 2 },
+            pressed && styles.buttonPressed,
+          ]}
         >
-          <Text style={styles.jumpArrow}>{'↑'}</Text>
-          <Text style={styles.jumpLabel}>SALTO</Text>
-        </Pressable>
+          <Text
+            style={[
+              styles.jumpArrow,
+              {
+                fontSize: Math.round(28 * buttonScale),
+                lineHeight: Math.round(30 * buttonScale),
+              },
+            ]}
+          >
+            {'↑'}
+          </Text>
+          <Text
+            style={[
+              styles.jumpLabel,
+              { fontSize: Math.max(8, Math.round(10 * buttonScale)) },
+            ]}
+          >
+            SALTO
+          </Text>
+        </ControlPressable>
       </View>
     </View>
   );

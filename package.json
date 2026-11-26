@@ -5,6 +5,7 @@
   "dependencies": {
     "@shopify/react-native-skia": "2.14.0",
     "expo": "~57.0.31",
+    "expo-screen-orientation": "~57.0.3",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
